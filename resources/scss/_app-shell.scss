@@ -1,0 +1,655 @@
+// Estructura de la aplicación: barra lateral + columna principal con topbar.
+//
+// Todas las medidas van en `rem` para que escalen con el tamaño de raíz que
+// fija _layout-base.scss; así el conjunto se compacta o se agranda de una pieza.
+
+$sidebar-width: 15.5rem;
+$main-padding-x: 1.25rem;
+$main-padding-top: 0.9rem;
+
+.app-shell {
+    min-height: 100vh;
+    width: 100%;
+    background: #f2f2f2;
+}
+
+.app-sidebar {
+    flex: 0 0 $sidebar-width;
+    width: $sidebar-width;
+    background: #f8f8f8;
+    border-right: 1px solid #dfdfdf;
+    padding: 0.75rem 0.65rem;
+    position: sticky;
+    top: 0;
+    // Altura de la ventana con scroll propio: un menú largo no arrastra
+    // la página entera ni descoloca el contenido.
+    height: 100vh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+.sidebar-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 1.1rem;
+    padding: 0.6rem 0.5rem 0.9rem;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+// El logo trae su propio fondo (squircle), así que aquí no se pinta ninguno.
+.brand-icon {
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 0.5rem;
+    object-fit: contain;
+    flex-shrink: 0;
+}
+
+.brand-title {
+    font-weight: 700;
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    line-height: 1.1;
+    color: #333;
+}
+
+// ── Secciones desplegables del menú ─────────────────────────────────────────
+//
+// Cada sección es una tarjeta delimitada: se ve dónde empieza y dónde acaba
+// aunque tenga muchos elementos. El color propio (--section-color, lo pone la
+// vista) vive en el punto, el borde izquierdo y la franja del encabezado, así
+// que la sección sigue identificándose incluso plegada.
+
+.nav-section {
+    --section-color: #9ca3af;
+
+    background: #ffffff;
+    border: 1px solid #e4e4e4;
+    border-left: 3px solid var(--section-color);
+    border-radius: 0.55rem;
+    overflow: hidden;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.nav-section + .nav-section {
+    margin-top: 0.6rem;
+}
+
+.nav-section-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    background: #fbfbfb;
+    border: 0;
+    padding: 0.55rem 0.7rem;
+    color: #5f6570;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    transition: background-color 0.15s ease, color 0.15s ease;
+
+    &:hover {
+        background: #f3f4f6;
+        color: #2f3440;
+    }
+
+    // Abierta: el encabezado se tiñe del color de la sección y se separa del
+    // contenido con una línea, para que el límite quede explícito.
+    &:not(.collapsed) {
+        background: color-mix(in srgb, var(--section-color) 9%, #ffffff);
+        color: color-mix(in srgb, var(--section-color) 65%, #1f2937);
+        border-bottom: 1px solid color-mix(in srgb, var(--section-color) 22%, #ffffff);
+    }
+}
+
+.nav-section-label {
+    flex: 1 1 auto;
+    text-align: left;
+}
+
+.nav-section-dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background: var(--section-color);
+    flex-shrink: 0;
+}
+
+// Plegada, el punto queda hueco: se distingue de un vistazo sin perder color.
+.nav-section-toggle.collapsed .nav-section-dot {
+    background: transparent;
+    box-shadow: inset 0 0 0 2px var(--section-color);
+}
+
+.nav-section-chevron {
+    font-size: 0.7rem;
+    transition: transform 0.2s ease;
+}
+
+.nav-section-toggle.collapsed .nav-section-chevron {
+    transform: rotate(-90deg);
+}
+
+.nav-section-items {
+    padding: 0.4rem;
+    gap: 0.15rem;
+}
+
+.app-link {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    border-radius: 0.4rem;
+    padding: 0.45rem 0.6rem;
+    color: #4b5158;
+    font-size: 0.86rem;
+    transition: background-color 0.15s ease, color 0.15s ease;
+
+    i {
+        color: var(--section-color, #9ca3af);
+        font-size: 0.95rem;
+        width: 1.1rem;
+        text-align: center;
+        flex-shrink: 0;
+    }
+}
+
+.app-link:hover {
+    background: color-mix(in srgb, var(--section-color, #9ca3af) 8%, #ffffff);
+    color: #1f2937;
+}
+
+.app-link.active {
+    background: color-mix(in srgb, var(--section-color, #9ca3af) 13%, #ffffff);
+    color: #111827;
+    font-weight: 600;
+}
+
+.app-main {
+    flex: 1 1 auto;
+    // Sin esto, una tabla ancha estira la columna flexible y rompe el layout.
+    min-width: 0;
+    padding: $main-padding-top $main-padding-x 1.5rem;
+}
+
+.app-topbar {
+    background: #1e1e1e;
+    border: 0;
+    border-radius: 0;
+    padding: 0.5rem 1rem;
+    // Fija arriba: al desplazarse, la barra ya no se recorta ni desaparece.
+    position: sticky;
+    top: 0;
+    z-index: 1030;
+    margin-left: -$main-padding-x;
+    margin-right: -$main-padding-x;
+    margin-top: -$main-padding-top;
+}
+
+.topbar-label {
+    color: #f2f2f2;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.topbar-separator {
+    color: #8f8f8f;
+    font-size: 0.8rem;
+}
+
+// La barra es oscura: aquí no sirven las utilidades .text-muted de Bootstrap,
+// pensadas para fondo claro — quedaban gris sobre negro, ilegibles.
+.topbar-context {
+    color: #d6d6d6;
+    font-size: 0.82rem;
+    white-space: nowrap;
+}
+
+.topbar-role {
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.btn-icon {
+    width: 2.2rem;
+    height: 2.2rem;
+    border-radius: 0.5rem;
+    border: 1px solid #3a3a3a;
+    background: #232323;
+    color: #e8e8e8;
+    display: grid;
+    place-items: center;
+    padding: 0;
+}
+
+.btn-icon:hover {
+    background: #2d2d2d;
+    color: #fff;
+}
+
+.btn-logout {
+    border: 1px solid #474747;
+    background: #2a2a2a;
+    color: #f0f0f0;
+    border-radius: 0.5rem;
+    padding: 0.35rem 0.65rem;
+    font-size: 0.82rem;
+}
+
+.btn-logout:hover {
+    background: #363636;
+    color: #fff;
+}
+
+// ── Tarjetas de indicadores del dashboard ───────────────────────────────────
+
+.kpi-card {
+    background: #fff;
+    border-radius: 0.7rem;
+    padding: 1.15rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    border: 0;
+    height: 100%;
+}
+
+.kpi-body {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 0.75rem;
+}
+
+.kpi-value {
+    font-size: 1.85rem;
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 0.25rem;
+}
+
+.kpi-label {
+    font-size: 0.82rem;
+    color: #777;
+    margin-bottom: 0.35rem;
+}
+
+.kpi-trend {
+    font-size: 0.75rem;
+}
+
+.kpi-icon {
+    width: 2.9rem;
+    height: 2.9rem;
+    border-radius: 0.75rem;
+    display: grid;
+    place-items: center;
+    color: #fff;
+    font-size: 1.2rem;
+    flex-shrink: 0;
+}
+
+// ── Barra lateral plegada (botón hamburguesa en escritorio) ─────────────────
+
+.app-shell.sidebar-collapsed .app-sidebar {
+    display: none;
+}
+
+// ── Panel lateral en móvil: mismo tema claro que la barra fija ──────────────
+
+.app-offcanvas {
+    background: #f8f8f8;
+    width: 16.5rem;
+
+    .offcanvas-header {
+        border-bottom: 1px solid #e0e0e0;
+    }
+
+    .offcanvas-body {
+        padding: 0.75rem 0.65rem;
+    }
+}
+
+@media (max-width: 991.98px) {
+    .app-sidebar {
+        display: none;
+    }
+
+    .app-main {
+        padding: 1rem;
+    }
+
+    .app-topbar {
+        margin-left: -1rem;
+        margin-right: -1rem;
+        margin-top: -1rem;
+    }
+
+    .topbar-context {
+        display: none;
+    }
+}
+
+// ── Personal: avatar y franjas de horario ───────────────────────────────────
+
+.staff-avatar {
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.staff-avatar-lg {
+    width: 3.5rem;
+    height: 3.5rem;
+}
+
+// Hueco con iniciales mientras no hay foto, en el color de agenda del barbero.
+.staff-avatar-initials {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-weight: 700;
+    font-size: 0.8rem;
+    letter-spacing: 0.02em;
+}
+
+.staff-avatar-lg.staff-avatar-initials {
+    font-size: 1.2rem;
+}
+
+.schedule-chip {
+    display: inline-block;
+    background: #eef2f7;
+    color: #374151;
+    border-radius: 2rem;
+    padding: 0.2rem 0.6rem;
+    font-size: 0.75rem;
+    white-space: nowrap;
+}
+
+.schedule-grid td + td {
+    border-left: 1px solid #f0f0f0;
+}
+
+// ── Calendario de la agenda ─────────────────────────────────────────────────
+//
+// Rejilla en posición absoluta: cada cita se coloca por su hora de inicio y se
+// estira según su duración, así que el alto es información, no decoración.
+// --hour-height y --columns las fija la vista.
+
+.calendar-scroll {
+    overflow-x: auto;
+}
+
+.calendar {
+    --gutter-width: 3.75rem;
+    min-width: 100%;
+}
+
+.calendar-head,
+.calendar-body {
+    display: grid;
+    grid-template-columns: var(--gutter-width) repeat(var(--columns), minmax(8.5rem, 1fr));
+}
+
+.calendar-head {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #fff;
+    border-bottom: 1px solid #e4e4e4;
+}
+
+.calendar-col-head {
+    padding: 0.6rem 0.5rem;
+    text-align: center;
+    font-size: 0.82rem;
+    border-left: 1px solid #f0f0f0;
+
+    &.is-today {
+        background: #eff6ff;
+    }
+}
+
+.calendar-body {
+    position: relative;
+}
+
+.calendar-gutter {
+    border-right: 1px solid #e4e4e4;
+}
+
+.calendar-hour {
+    height: var(--hour-height);
+    padding-right: 0.4rem;
+    text-align: right;
+    font-size: 0.7rem;
+    color: #9ca3af;
+    // Sube la etiqueta para que quede sobre su línea, no debajo.
+    transform: translateY(-0.45rem);
+}
+
+.calendar-col {
+    position: relative;
+    border-left: 1px solid #f0f0f0;
+
+    &.is-today {
+        background: #fbfdff;
+    }
+}
+
+.calendar-slot {
+    height: var(--hour-height);
+    border-bottom: 1px solid #f4f4f4;
+}
+
+// Franja de trabajo: lo que queda fuera se lee como no laborable.
+.calendar-shift {
+    position: absolute;
+    left: 0;
+    right: 0;
+    background: #f7f9fc;
+    border-top: 1px solid #eef1f6;
+    border-bottom: 1px solid #eef1f6;
+}
+
+.calendar-event {
+    position: absolute;
+    left: 0.2rem;
+    right: 0.2rem;
+    min-height: 1.4rem;
+    padding: 0.2rem 0.4rem;
+    border-radius: 0.35rem;
+    border-left: 3px solid var(--event-color, #2563eb);
+    background: color-mix(in srgb, var(--event-color, #2563eb) 12%, #ffffff);
+    color: #1f2937;
+    font-size: 0.72rem;
+    line-height: 1.15;
+    overflow: hidden;
+    text-decoration: none;
+    transition: filter 0.15s ease;
+
+    &:hover {
+        filter: brightness(0.96);
+        color: #111827;
+        z-index: 3;
+    }
+}
+
+.calendar-event-time {
+    font-weight: 700;
+    margin-right: 0.25rem;
+}
+
+.calendar-event-title {
+    font-weight: 600;
+}
+
+.calendar-event-meta {
+    display: block;
+    color: #6b7280;
+}
+
+// Confirmada se ve más sólida; atendida, apagada: el día avanza visualmente.
+.calendar-event-confirmada {
+    background: color-mix(in srgb, var(--event-color, #2563eb) 22%, #ffffff);
+}
+
+.calendar-event-atendida {
+    background: #f3f4f6;
+    border-left-color: #9ca3af;
+    color: #6b7280;
+}
+
+.legend-swatch {
+    display: inline-block;
+    width: 1.1rem;
+    height: 0.7rem;
+    border-radius: 0.2rem;
+    border-left: 3px solid var(--event-color, #2563eb);
+}
+
+.legend-shift {
+    background: #f7f9fc;
+    border: 1px solid #eef1f6;
+    border-left: 1px solid #eef1f6;
+}
+
+// ── Punto de venta: catálogo táctil ─────────────────────────────────────────
+
+.catalog-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    width: 100%;
+    height: 100%;
+    text-align: left;
+    background: #fff;
+    border: 1px solid #e4e4e4;
+    border-radius: 0.5rem;
+    padding: 0.6rem 0.7rem;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+
+    &:hover:not(:disabled) {
+        border-color: #2563eb;
+        background: #f5f8ff;
+    }
+
+    &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+}
+
+.catalog-name {
+    font-weight: 600;
+    font-size: 0.85rem;
+    line-height: 1.2;
+}
+
+.catalog-meta {
+    font-size: 0.72rem;
+    color: #9ca3af;
+}
+
+.catalog-price {
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: #1f2937;
+}
+
+
+//
+// Calendario mensual. Tabla en vez de grid porque las filas de semana tienen
+// que crecer con su contenido y mantenerse alineadas entre sí.
+//
+.month-grid {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+
+    th {
+        padding: .5rem;
+        font-size: .75rem;
+        text-transform: uppercase;
+        letter-spacing: .03em;
+        color: var(--bs-secondary-color);
+        background: var(--bs-tertiary-bg);
+        border-bottom: 1px solid var(--bs-border-color);
+        text-align: center;
+    }
+}
+
+.month-cell {
+    height: 96px;
+    vertical-align: top;
+    padding: 0;
+    border: 1px solid var(--bs-border-color);
+
+    &.month-cell-outside {
+        background: var(--bs-tertiary-bg);
+
+        .month-cell-date {
+            color: var(--bs-secondary-color);
+        }
+    }
+
+    &.month-cell-today .month-cell-date {
+        background: var(--bs-primary);
+        color: #fff;
+        border-radius: 50%;
+        width: 1.5rem;
+        height: 1.5rem;
+        display: grid;
+        place-items: center;
+    }
+
+    // Día cerrado por un bloqueo que lo cubre entero.
+    &.month-cell-closed {
+        background: repeating-linear-gradient(
+            45deg,
+            rgba(var(--bs-danger-rgb), .05),
+            rgba(var(--bs-danger-rgb), .05) 6px,
+            transparent 6px,
+            transparent 12px
+        );
+    }
+}
+
+.month-cell-link {
+    display: flex;
+    flex-direction: column;
+    gap: .15rem;
+    height: 100%;
+    padding: .35rem;
+    text-decoration: none;
+    color: inherit;
+
+    &:hover {
+        background: rgba(var(--bs-primary-rgb), .06);
+    }
+}
+
+.month-cell-date {
+    font-size: .8rem;
+    font-weight: 600;
+}
+
+.month-tag,
+.month-note {
+    font-size: .65rem;
+    line-height: 1.2;
+    border-radius: .25rem;
+    padding: .1rem .25rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.month-note {
+    padding-left: 0;
+}

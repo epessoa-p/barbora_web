@@ -1,0 +1,15 @@
+// Hoja de estilos de Barbora.
+//
+// El orden importa: las variables van antes de Bootstrap para poder
+// sobrescribirlo, y los estilos propios después para poder ajustarlo.
+
+@use 'variables' as *;
+
+@import 'bootstrap/scss/bootstrap';
+@import 'bootstrap-icons/font/bootstrap-icons.css';
+
+// Estilos que antes vivían en bloques <style> dentro de los layouts Blade.
+@import 'layout-base';   // layouts/base.blade.php
+@import 'app-shell';     // layouts/app.blade.php  (sidebar, topbar, .app-link)
+@import 'auth';          // layouts/auth.blade.php (login, selección de empresa)
+@import 'reports';       // reports/* (tarjetas, gráfico de barras, impresión)

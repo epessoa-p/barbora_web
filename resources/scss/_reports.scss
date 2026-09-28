@@ -1,0 +1,109 @@
+//
+// Reportes: tarjetas del hub y gráfico de barras en CSS.
+//
+
+.report-card {
+    transition: transform .12s ease, box-shadow .12s ease;
+
+    &:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 .5rem 1rem rgba(0, 0, 0, .12) !important;
+    }
+}
+
+.report-card-icon {
+    flex: 0 0 auto;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: .75rem;
+    display: grid;
+    place-items: center;
+    font-size: 1.25rem;
+}
+
+//
+// Gráfico de barras. Las barras se reparten el ancho disponible, así que sirve
+// igual para 7 días que para 31 sin cambiar nada.
+//
+.bar-chart {
+    display: flex;
+    align-items: flex-end;
+    gap: .25rem;
+    height: 190px;
+    overflow-x: auto;
+}
+
+.bar-chart-col {
+    flex: 1 1 0;
+    min-width: 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 100%;
+}
+
+.bar-chart-track {
+    flex: 1 1 auto;
+    width: 100%;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+}
+
+.bar-chart-bar {
+    width: 100%;
+    max-width: 2.25rem;
+    min-height: 0;
+    border-radius: .25rem .25rem 0 0;
+    background: linear-gradient(180deg, var(--bs-primary) 0%, rgba(var(--bs-primary-rgb), .65) 100%);
+    transition: filter .12s ease;
+
+    .bar-chart-col:hover & {
+        filter: brightness(1.15);
+    }
+}
+
+.bar-chart-label {
+    margin-top: .35rem;
+    font-size: .65rem;
+    color: var(--bs-secondary-color);
+    white-space: nowrap;
+
+    // Con muchos días las etiquetas se pisan: se giran para que quepan.
+    .bar-chart[style*="--bar-count: 2"] &,
+    .bar-chart[style*="--bar-count: 3"] & {
+        transform: rotate(-60deg);
+        transform-origin: center;
+    }
+}
+
+//
+// Impresión: la hoja es el reporte, sin cascarón de la aplicación.
+//
+@media print {
+    .app-sidebar,
+    .app-topbar,
+    .d-print-none {
+        display: none !important;
+    }
+
+    .app-main {
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 100% !important;
+    }
+
+    .card {
+        border: 1px solid #dee2e6 !important;
+        box-shadow: none !important;
+        break-inside: avoid;
+    }
+
+    .bar-chart {
+        overflow-x: visible;
+    }
+
+    a[href]::after {
+        content: none !important;
+    }
+}

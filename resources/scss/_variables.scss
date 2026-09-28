@@ -1,0 +1,21 @@
+// Paleta Barbora. Se cargan antes de Bootstrap para sobrescribir sus variables.
+
+$primary:   #1f2937;   // gris carbón: la navaja
+$secondary: #6b7280;
+$success:   #198754;
+$info:      #0dcaf0;
+$warning:   #f59e0b;
+$danger:    #dc3545;
+$light:     #f8f9fa;
+$dark:      #111827;
+
+$body-bg:   #f2f2f2;
+$body-color: #1f2937;
+
+$font-family-sans-serif: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+
+$border-radius:    .5rem;
+$border-radius-sm: .375rem;
+$border-radius-lg: .75rem;
+
+$enable-shadows: false;

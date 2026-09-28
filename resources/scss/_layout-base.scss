@@ -1,0 +1,65 @@
+// Base del documento.
+//
+// La escala compacta vive aquí: Bootstrap dimensiona casi todo en `rem`, así
+// que bajar el tamaño de raíz encoge tipografía, espaciados, botones, tablas y
+// formularios *en conjunto* — el aspecto denso de un panel de administración,
+// en lugar de tener que añadir `-sm` clase por clase. Al hacer zoom, el
+// navegador escala esta misma base y el layout, que es fluido, reaprovecha el
+// ancho ganado en vez de dejar hueco muerto.
+
+html {
+    font-size: 14px;
+    height: 100%;
+}
+
+@media (min-width: 1600px) {
+    html {
+        font-size: 15px;
+    }
+}
+
+body {
+    min-height: 100%;
+    margin: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    // El mismo gris que el shell: así nunca queda una franja sin pintar,
+    // por mucho que se aleje el zoom.
+    background-color: #f2f2f2;
+}
+
+// ── Ajustes transversales de Bootstrap ──────────────────────────────────────
+
+.card {
+    border: none;
+    border-radius: 0.6rem;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.alert {
+    border: none;
+    border-radius: 0.45rem;
+}
+
+.badge {
+    padding: 0.35em 0.75em;
+    border-radius: 2rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.table > :not(caption) > * > * {
+    padding: 0.6rem 0.75rem;
+}
+
+.table thead {
+    background-color: #f8f9fa;
+}
+
+.table tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+.modal-content {
+    border: none;
+    border-radius: 0.6rem;
+}
