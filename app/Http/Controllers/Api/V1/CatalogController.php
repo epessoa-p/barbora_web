@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Http\Resources\AppointmentResource;
 use App\Http\Resources\ClientResource;
 use App\Http\Resources\ServiceResource;
 use App\Models\Client;
 use App\Models\Product;
 use App\Models\Service;
+use App\Support\ShopTime;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -86,6 +88,43 @@ class CatalogController extends ApiController
                 'last_page' => $clients->lastPage(),
                 'per_page' => $clients->perPage(),
                 'total' => $clients->total(),
+            ],
+        ]);
+    }
+
+    /**
+     * La ficha del cliente: sus datos, un resumen de su historia con la
+     * barbería y sus últimas citas.
+     *
+     * El binding {client} ya está acotado a la empresa activa (SetTenant corre
+     * antes que SubstituteBindings), así que una ficha de otra barbería da 404.
+     */
+    public function show(Request $request, Client $client): JsonResponse
+    {
+        $company = $request->attributes->get('tenant_company');
+
+        $recent = $client->appointments()
+            ->with(['personal', 'services', 'branch'])
+            ->orderByDesc('starts_at')
+            ->limit(5)
+            ->get();
+
+        // Solo cuentan las ventas pagadas: una comanda anulada no es una visita.
+        $lastSale = $client->sales()->paid()->orderByDesc('sold_at')->first();
+
+        return $this->json([
+            'data' => (new ClientResource($client))->resolve() + [
+                'stats' => [
+                    'visits' => $client->sales()->paid()->count(),
+                    'total_spent' => (float) $client->sales()->paid()->sum('total'),
+                    'last_visit' => ShopTime::iso($lastSale?->sold_at, $company),
+                    // Citas por venir que aún ocupan hueco (ni canceladas ni no_show).
+                    'upcoming' => $client->appointments()
+                        ->blocking()
+                        ->where('starts_at', '>', now())
+                        ->count(),
+                ],
+                'recent_appointments' => AppointmentResource::collection($recent)->resolve(),
             ],
         ]);
     }

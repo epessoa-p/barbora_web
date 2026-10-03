@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\V1\AgendaController;
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\BookingController;
 use App\Http\Controllers\Api\V1\CashController;
 use App\Http\Controllers\Api\V1\CatalogController;
 use App\Http\Controllers\Api\V1\MyController;
@@ -51,12 +52,42 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::get('/services', [CatalogController::class, 'services'])
             ->middleware('check-permission:services.view')->name('services');
+
+        // Reservar: barberos, huecos libres y alta de la cita. Las reglas son
+        // las de la web (App\Support\AppointmentBooker).
+        Route::get('/staff', [BookingController::class, 'staff'])
+            ->middleware('check-permission:appointments.create')->name('staff');
+
+        // El mismo catálogo que /services, pero con el permiso de reservar:
+        // recepción reserva sin necesitar permiso para ver el catálogo.
+        Route::get('/booking/services', [CatalogController::class, 'services'])
+            ->middleware('check-permission:appointments.create')->name('booking.services');
+
+        Route::get('/booking/slots', [BookingController::class, 'slots'])
+            ->middleware('check-permission:appointments.create')->name('booking.slots');
+
+        Route::post('/appointments', [BookingController::class, 'store'])
+            ->middleware('check-permission:appointments.create')->name('appointments.store');
+
+        // Reprogramar: mover día, hora, barbero o servicios de una cita viva.
+        Route::put('/appointments/{appointment}', [BookingController::class, 'update'])
+            ->middleware('check-permission:appointments.edit')->name('appointments.update');
     });
+
+    // Alta rápida de cliente al reservar (módulo «clientes»).
+    Route::post('/clients', [BookingController::class, 'storeClient'])
+        ->middleware(['plan:clientes', 'check-permission:clients.create'])
+        ->name('clients.store');
 
     // ── Clientes (módulo de plan «clientes») ────────────────────────────────
     Route::get('/clients', [CatalogController::class, 'clients'])
         ->middleware(['plan:clientes', 'check-permission:clients.view'])
         ->name('clients');
+
+    // La ficha: datos del cliente, su resumen (visitas, gasto) y últimas citas.
+    Route::get('/clients/{client}', [CatalogController::class, 'show'])
+        ->middleware(['plan:clientes', 'check-permission:clients.view'])
+        ->name('clients.show');
 
     // ── Productos (módulo de plan «inventario») ─────────────────────────────
     Route::get('/products', [CatalogController::class, 'products'])

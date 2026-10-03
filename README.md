@@ -164,6 +164,37 @@ Las rutas `my/*` (horario, agenda y comisiones propias) no llevan
 `check-permission`: un barbero no necesita permiso sobre lo ajeno para ver lo
 suyo. A cambio, `MyController` filtra siempre por su propia ficha de personal.
 
+#### Reservar citas
+
+Las reglas de reserva viven en **`App\Support\AppointmentBooker`**, y las usan la
+agenda web y la API: no en el pasado, dentro de un turno del barbero, fuera de
+bloqueos y sin pisar otra cita.
+
+| Ruta | Permiso | Para qué |
+|---|---|---|
+| `GET /staff` | `appointments.create` | Personal que atiende citas (`bookable`) |
+| `GET /booking/services` | `appointments.create` | Catálogo de servicios para reservar |
+| `GET /booking/slots?personal_id&date&services[]` | `appointments.create` | Horas de inicio libres (`['09:00', …]`, cada 15 min) |
+| `POST /appointments` | `appointments.create` | Crea la cita: `personal_id, client_id, date, time, services[], notes?` |
+| `PUT /appointments/{id}` | `appointments.edit` | Reprograma (mismos campos). Una cita cerrada responde `422 appointment_closed` |
+| `POST /clients` | `clients.create` | Alta rápida: `full_name, phone?` |
+
+La ficha del cliente va aparte, en el módulo de clientes:
+
+| Ruta | Permiso | Para qué |
+|---|---|---|
+| `GET /clients` | `clients.view` | Lista paginada y búsqueda (`?q=`) |
+| `GET /clients/{id}` | `clients.view` | Ficha: datos + `stats` (visitas, gasto, última visita, citas por venir) + `recent_appointments` |
+
+`stats` cuenta solo ventas **pagadas** como visitas (una comanda anulada no es una
+visita). El binding `{client}` va acotado a la empresa activa, así que una ficha
+de otra barbería responde 404. Lo cubre `ApiBookingTest`.
+
+`/booking/services` existe aparte de `/services` porque recepción reserva sin
+tener `services.view`. La promesa que cubre `ApiBookingTest`: **toda hora que
+`slots` ofrece es una hora que `POST /appointments` acepta** — los dos salen de
+las mismas reglas.
+
 #### Cobrar sin cobrar dos veces
 
 `POST /sales` acepta la cabecera **`Idempotency-Key`**, y conviene mandarla
