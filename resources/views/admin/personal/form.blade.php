@@ -55,7 +55,7 @@
 
                         <div class="col-md-8">
                             <label class="form-label">Nombre completo <span class="text-danger">*</span></label>
-                            <input type="text" name="full_name" class="form-control" value="{{ old('full_name', $personal?->full_name) }}" required>
+                            <input type="text" name="full_name" id="full_name" class="form-control" value="{{ old('full_name', $personal?->full_name) }}" required>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Documento</label>
@@ -163,33 +163,54 @@
             @endif
         </div>
 
+        @php($hasUser = (bool) $personal?->user_id)
         <div class="col-lg-5">
             <div class="card border-0 shadow-sm">
                 <div class="card-body p-4">
-                    <h6 class="fw-bold mb-3"><i class="bi bi-person-gear"></i> Datos del usuario</h6>
-                    <div class="alert alert-info small">
-                        El nombre de usuario se genera automáticamente con base en el nombre completo.
-                    </div>
+                    <h6 class="fw-bold mb-3"><i class="bi bi-person-gear"></i> Cuenta de acceso</h6>
 
-                    <div class="mb-3">
-                        <label class="form-label">Email de acceso <span class="text-danger">*</span></label>
-                        <input type="email" name="email" class="form-control @error('email') is-invalid @enderror" value="{{ old('email', $personal?->user?->email ?? $personal?->email) }}" required>
-                        @error('email')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                    </div>
+                    {{-- Un personal no siempre necesita entrar al sistema (p. ej. un
+                         barbero que no usa la app). La cuenta es opcional, pero por
+                         defecto se crea. Si el personal ya tiene cuenta, se edita. --}}
+                    @unless($hasUser)
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" name="create_user" value="1" id="create_user"
+                                {{ old('create_user', $personal ? false : true) ? 'checked' : '' }}>
+                            <label class="form-check-label" for="create_user">
+                                Crear cuenta de acceso (usuario y contraseña)
+                            </label>
+                        </div>
+                    @endunless
 
-                    <div class="mb-3">
-                        <label class="form-label">Contraseña {{ $personal ? '(opcional para cambiar)' : '' }} <span class="text-danger">{{ $personal ? '' : '*' }}</span></label>
-                        <input type="password" name="password" class="form-control @error('password') is-invalid @enderror" {{ $personal ? '' : 'required' }}>
-                        @error('password')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                    </div>
+                    <div id="user-fields" class="{{ (! $hasUser && ! old('create_user', $personal ? false : true)) ? 'd-none' : '' }}">
+                        <div class="mb-3">
+                            <label class="form-label">Nombre de usuario <span class="text-danger">*</span></label>
+                            <input type="text" name="username" id="username" class="form-control @error('username') is-invalid @enderror"
+                                value="{{ old('username', $personal?->user?->name) }}" autocomplete="off">
+                            <small class="text-muted">Se usa para iniciar sesión. Se genera del nombre, pero puedes cambiarlo.</small>
+                            @error('username')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        </div>
 
-                    <div class="mb-3">
-                        <label class="form-label">Confirmar contraseña {{ $personal ? '(si cambiaste)' : '' }}</label>
-                        <input type="password" name="password_confirmation" class="form-control" {{ $personal ? '' : 'required' }}>
+                        <div class="mb-3">
+                            <label class="form-label">Email de acceso</label>
+                            <input type="email" name="email" class="form-control @error('email') is-invalid @enderror" value="{{ old('email', $personal?->user?->email ?? $personal?->email) }}">
+                            @error('email')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Contraseña {{ $hasUser ? '(opcional para cambiar)' : '' }} <span class="text-danger user-required">{{ $hasUser ? '' : '*' }}</span></label>
+                            <input type="password" name="password" class="form-control @error('password') is-invalid @enderror">
+                            @error('password')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Confirmar contraseña {{ $hasUser ? '(si cambiaste)' : '' }}</label>
+                            <input type="password" name="password_confirmation" class="form-control">
+                        </div>
                     </div>
 
                     <button class="btn btn-primary w-100" type="submit">
-                        <i class="bi bi-save"></i> {{ $personal ? 'Guardar cambios' : 'Crear personal y usuario' }}
+                        <i class="bi bi-save"></i> {{ $personal ? 'Guardar cambios' : 'Crear personal' }}
                     </button>
                     <a href="{{ route('personal.index') }}" class="btn btn-light border w-100 mt-2">Cancelar</a>
                 </div>
@@ -197,3 +218,43 @@
         </div>
     </form>
 </div>
+
+@push('scripts')
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const fullName = document.getElementById('full_name');
+    const username = document.getElementById('username');
+    const toggle = document.getElementById('create_user');
+    const fields = document.getElementById('user-fields');
+
+    // El usuario se arma a partir del nombre completo: minúsculas, sin acentos,
+    // espacios a "_" y solo letras/números. Deja de autollenarse en cuanto se
+    // edita a mano.
+    let touched = username && username.value.trim() !== '';
+
+    function slugify(value) {
+        return value.toLowerCase()
+            .normalize('NFD').replace(/[̀-ͯ]/g, '')
+            .replace(/[^a-z0-9\s]/g, '')
+            .trim().replace(/\s+/g, '_');
+    }
+
+    if (username) {
+        username.addEventListener('input', function () { touched = true; });
+    }
+
+    if (fullName && username) {
+        fullName.addEventListener('input', function () {
+            if (!touched) username.value = slugify(fullName.value);
+        });
+    }
+
+    // La casilla muestra/oculta los campos de la cuenta.
+    if (toggle && fields) {
+        const sync = function () { fields.classList.toggle('d-none', !toggle.checked); };
+        toggle.addEventListener('change', sync);
+        sync();
+    }
+});
+</script>
+@endpush

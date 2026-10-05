@@ -148,14 +148,14 @@ class CompanyProfileTest extends TestCase
     }
 
     /**
-     * El nombre y el NIT son los datos con los que el operador verifica la
-     * identidad en soporte: el cliente no puede cambiarlos.
+     * La barbería edita su propio nombre, pero el NIT no: ese sigue siendo el
+     * dato con el que el operador verifica la identidad en soporte.
      */
-    public function test_el_nombre_y_el_nit_no_se_cambian_desde_aqui(): void
+    public function test_el_nombre_se_cambia_pero_el_nit_no(): void
     {
         $this->actingInCompany($this->admin, $this->company)
             ->put(route('company-profile.update'), [
-                'name' => 'Otro nombre',
+                'name' => 'Barbería Renombrada',
                 'tax_id' => '9999999',
                 'address' => 'Calle 1',
             ])
@@ -163,8 +163,8 @@ class CompanyProfileTest extends TestCase
 
         $this->company->refresh();
 
-        $this->assertSame('Barbería Demo', $this->company->name);
-        $this->assertSame('1023456789', $this->company->tax_id);
+        $this->assertSame('Barbería Renombrada', $this->company->name, 'El nombre sí se edita.');
+        $this->assertSame('1023456789', $this->company->tax_id, 'El NIT no se toca desde aquí.');
         $this->assertSame('Calle 1', $this->company->address);
     }
 

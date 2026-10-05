@@ -16,6 +16,7 @@ class Caja extends Model
     protected $fillable = [
         'company_id',
         'branch_id',
+        'personal_id',
         'name',
         'code',
         'description',
@@ -32,6 +33,12 @@ class Caja extends Model
     public function branch(): BelongsTo
     {
         return $this->belongsTo(Branch::class);
+    }
+
+    /** El personal al que está asignada esta caja; null = caja general. */
+    public function personal(): BelongsTo
+    {
+        return $this->belongsTo(Personal::class);
     }
 
     public function sessions(): HasMany

@@ -53,24 +53,15 @@ class UserListTest extends TestCase
      * Si un usuario trabaja en dos barberías, el admin de una no tiene por qué
      * saber que también está en la otra.
      */
-    public function test_el_admin_de_barberia_no_ve_las_otras_barberias_del_usuario(): void
+    public function test_una_empresa_no_accede_a_la_pantalla_de_usuarios(): void
     {
+        // Usuarios es pantalla del operador del SaaS: solo el superadmin. Una
+        // empresa gestiona su gente desde Personal, no desde aquí, aunque tenga
+        // el permiso users.view.
         $demo = $this->companyWithPlan(['name' => 'Barbería Demo']);
-        $otra = $this->companyWithPlan(['name' => 'Barbería Secreta']);
-
         $admin = $this->userInCompany($demo, ['users.view'], 'admin_demo');
 
-        // Un barbero que trabaja en las dos.
-        $compartido = $this->userInCompany($demo, [], 'barbero');
-        $compartido->companies()->attach($otra->id, [
-            'role_id' => Role::where('slug', 'barbero')->value('id'),
-            'active' => true,
-        ]);
-
-        $this->actingInCompany($admin, $demo)->get(route('users.index'))
-            ->assertOk()
-            ->assertSee($compartido->email)
-            ->assertDontSee('Barbería Secreta');
+        $this->actingInCompany($admin, $demo)->get(route('users.index'))->assertForbidden();
     }
 
     public function test_un_usuario_sin_barberia_se_senala(): void

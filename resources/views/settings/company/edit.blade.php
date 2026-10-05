@@ -28,14 +28,16 @@
             @csrf
             @method('PUT')
 
-            {{-- Nombre y NIT: solo lectura. Ver CompanyProfileController. --}}
+            {{-- El nombre lo edita la barbería; el NIT no (verificación de soporte). --}}
             <div class="card border-0 shadow-sm mb-4">
                 <div class="card-body p-4">
-                    <h6 class="fw-bold mb-3"><i class="bi bi-lock"></i> Identificación</h6>
+                    <h6 class="fw-bold mb-3"><i class="bi bi-shop"></i> Identificación</h6>
                     <div class="row g-3">
                         <div class="col-md-7">
-                            <label class="form-label">Nombre</label>
-                            <input type="text" class="form-control" value="{{ $company->name }}" disabled>
+                            <label class="form-label">Nombre de la barbería <span class="text-danger">*</span></label>
+                            <input type="text" name="name" class="form-control @error('name') is-invalid @enderror"
+                                   data-preview="name" value="{{ old('name', $company->name) }}" {{ $canEdit ? '' : 'disabled' }} required>
+                            @error('name')<div class="invalid-feedback">{{ $message }}</div>@enderror
                         </div>
                         <div class="col-md-5">
                             <label class="form-label">{{ $company->tax_id_label }}</label>
@@ -43,8 +45,8 @@
                         </div>
                     </div>
                     <small class="text-muted d-block mt-2">
-                        Para cambiar el nombre o el {{ $company->tax_id_label }}, escribe a soporte:
-                        son los datos con los que verificamos que eres tú.
+                        Para cambiar el {{ $company->tax_id_label }}, escribe a soporte:
+                        es el dato con el que verificamos que eres tú.
                     </small>
                 </div>
             </div>
@@ -129,7 +131,7 @@
                     <img id="preview-logo" src="{{ $company->logoUrl() }}" alt=""
                          class="{{ $company->logoUrl() ? '' : 'd-none' }}"
                          style="max-height: 56px; max-width: 70%; object-fit: contain; margin-bottom: .4rem;">
-                    <div class="fw-bold" style="letter-spacing: .08em;">{{ Str::upper($company->name) }}</div>
+                    <div class="fw-bold" style="letter-spacing: .08em;" id="preview-name">{{ Str::upper($company->name) }}</div>
                     @if($company->tax_id)
                         <div class="text-muted">{{ $company->tax_id_label }}: {{ $company->tax_id }}</div>
                     @endif

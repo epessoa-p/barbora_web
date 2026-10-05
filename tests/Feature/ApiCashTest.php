@@ -507,6 +507,33 @@ class ApiCashTest extends TestCase
     }
 
     /* ---------------------------------------------------------------------
+     | Movimientos: detalle de la venta y quién la registró
+     |--------------------------------------------------------------------- */
+
+    public function test_el_movimiento_de_venta_trae_su_detalle_y_quien_registro(): void
+    {
+        $this->openSession();
+        $service = $this->service(100);
+        $service->forceFill(['name' => 'Corte clásico'])->save();
+
+        Sanctum::actingAs($this->cajero);
+
+        $this->withHeaders($this->headers(['Idempotency-Key' => 'mov-detalle']))
+            ->postJson('/api/v1/sales', $this->salePayload($service, 100))
+            ->assertCreated();
+
+        $movements = $this->withHeaders($this->headers())
+            ->getJson('/api/v1/cash/movements')
+            ->assertOk()
+            ->json('data');
+
+        $sale = collect($movements)->firstWhere('type', 'ingreso');
+
+        $this->assertSame('Corte clásico', $sale['detail'], 'El movimiento debe decir qué incluyó la venta.');
+        $this->assertSame($this->cajero->name, $sale['created_by']);
+    }
+
+    /* ---------------------------------------------------------------------
      | Utilidades
      |--------------------------------------------------------------------- */
 

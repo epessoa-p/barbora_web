@@ -434,6 +434,38 @@ class ApiBookingTest extends TestCase
         $this->getJson("/api/v1/clients/{$ajeno->id}", $this->headers())->assertNotFound();
     }
 
+    public function test_se_edita_un_servicio_desde_el_movil(): void
+    {
+        $editor = $this->userInCompany($this->company, ['services.view', 'services.edit'], 'editor_api');
+        Sanctum::actingAs($editor);
+
+        $this->putJson("/api/v1/services/{$this->corte->id}", [
+            'name' => 'Corte premium',
+            'duration_minutes' => 45,
+            'price' => 80,
+            'active' => 1,
+        ], $this->headers())
+            ->assertOk()
+            ->assertJsonPath('data.price', 80.0)
+            ->assertJsonPath('data.name', 'Corte premium');
+
+        $this->assertDatabaseHas('services', [
+            'id' => $this->corte->id,
+            'name' => 'Corte premium',
+            'duration_minutes' => 45,
+        ]);
+    }
+
+    public function test_sin_permiso_de_edicion_no_se_edita_un_servicio(): void
+    {
+        // Recepción no tiene services.edit.
+        Sanctum::actingAs($this->recepcion);
+
+        $this->putJson("/api/v1/services/{$this->corte->id}", [
+            'name' => 'Hackeado', 'duration_minutes' => 30, 'price' => 1,
+        ], $this->headers())->assertForbidden();
+    }
+
     public function test_alta_rapida_de_cliente(): void
     {
         Sanctum::actingAs($this->recepcion);

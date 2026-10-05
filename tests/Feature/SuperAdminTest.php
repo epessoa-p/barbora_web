@@ -6,6 +6,8 @@ use App\Models\Branch;
 use App\Models\Company;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 /**
@@ -130,5 +132,50 @@ class SuperAdminTest extends TestCase
         ])->assertRedirect(route('companies.show', $company));
 
         $this->assertSame(5, $company->refresh()->effectiveLimit('branches'));
+    }
+
+    public function test_al_crear_una_empresa_se_le_puede_subir_el_logo(): void
+    {
+        Storage::fake('public');
+        $superAdmin = User::factory()->superAdmin()->create();
+
+        $this->actingAs($superAdmin)->post(route('companies.store'), [
+            'name' => 'Barbería con Logo',
+            'tax_id' => '7778889990',
+            'tax_id_label' => 'NIT',
+            'country' => 'BO',
+            'currency' => 'BOB',
+            'timezone' => 'America/La_Paz',
+            'active' => 1,
+            'logo' => UploadedFile::fake()->image('logo.png', 300, 300),
+        ])->assertRedirect();
+
+        $company = Company::where('tax_id', '7778889990')->firstOrFail();
+
+        $this->assertNotNull($company->logo);
+        $this->assertStringStartsWith("companies/{$company->id}/", $company->logo);
+        Storage::disk('public')->assertExists($company->logo);
+    }
+
+    public function test_al_editar_una_empresa_se_le_puede_subir_el_logo(): void
+    {
+        Storage::fake('public');
+        $superAdmin = User::factory()->superAdmin()->create();
+        $company = $this->companyWithPlan(['tax_id' => '1112223334']);
+
+        $this->actingAs($superAdmin)->put(route('companies.update', $company), [
+            'name' => $company->name,
+            'tax_id' => $company->tax_id,
+            'country' => 'BO',
+            'currency' => 'BOB',
+            'timezone' => 'America/La_Paz',
+            'active' => 1,
+            'logo' => UploadedFile::fake()->image('nuevo.png'),
+        ])->assertRedirect();
+
+        $company->refresh();
+
+        $this->assertNotNull($company->logo);
+        Storage::disk('public')->assertExists($company->logo);
     }
 }

@@ -2,14 +2,18 @@
 
 namespace App\Http\Controllers\Platform;
 
+use App\Http\Controllers\Concerns\HandlesCompanyLogo;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreCompanyRequest;
 use App\Models\Company;
 use App\Models\Plan;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 
 class CompanyController extends Controller
 {
+    use HandlesCompanyLogo;
+
     public function index()
     {
         $companies = Company::with('subscription.plan')->paginate(15);
@@ -31,7 +35,9 @@ class CompanyController extends Controller
         ])['plan_id'] ?? null;
 
         $company = DB::transaction(function () use ($request, $planId) {
-            $company = Company::create($request->validated());
+            // El archivo no se mass-assignea: el logo se guarda aparte, ya con id.
+            $company = Company::create(Arr::except($request->validated(), ['logo', 'remove_logo']));
+            $this->syncCompanyLogo($request, $company);
 
             // Una empresa sin suscripciÃ³n queda bloqueada al entrar, asÃ­ que
             // se le asigna su periodo de prueba en el mismo acto de alta.
@@ -67,7 +73,8 @@ class CompanyController extends Controller
 
     public function update(StoreCompanyRequest $request, Company $company)
     {
-        $company->update($request->validated());
+        $company->update(Arr::except($request->validated(), ['logo', 'remove_logo']));
+        $this->syncCompanyLogo($request, $company);
 
         return redirect()->route('companies.show', $company)->with('success', 'Empresa actualizada exitosamente');
     }

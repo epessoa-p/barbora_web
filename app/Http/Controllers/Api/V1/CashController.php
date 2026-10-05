@@ -6,7 +6,9 @@ use App\Models\Caja;
 use App\Models\CashMovement;
 use App\Models\CashSession;
 use App\Models\Company;
+use App\Models\Sale;
 use App\Support\ShopTime;
+use Illuminate\Support\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -178,11 +180,12 @@ class CashController extends ApiController
         }
 
         $session->load('movements.creator');
+        $details = $this->saleDetails($session->movements);
 
         return $this->json([
             'session' => $this->sessionPayload($session),
             'data' => $session->movements
-                ->map(fn (CashMovement $m) => $this->movementPayload($m))
+                ->map(fn (CashMovement $m) => $this->movementPayload($m, $details))
                 ->all(),
         ]);
     }
@@ -247,15 +250,46 @@ class CashController extends ApiController
         }
 
         if ($withMovements) {
+            $details = $this->saleDetails($session->movements);
             $payload['movements'] = $session->movements
-                ->map(fn (CashMovement $m) => $this->movementPayload($m))
+                ->map(fn (CashMovement $m) => $this->movementPayload($m, $details))
                 ->all();
         }
 
         return $payload;
     }
 
-    protected function movementPayload(CashMovement $movement): array
+    /**
+     * El detalle de los movimientos que son ventas: «Corte clásico + Barba».
+     *
+     * El movimiento guarda el número de venta en `reference`; aquí se traen esas
+     * ventas de una sola vez (sin N+1) y se arma el listado de lo que incluyó.
+     *
+     * @param  Collection<int, CashMovement>  $movements
+     * @return array<string, string>  número de venta → detalle
+     */
+    protected function saleDetails(Collection $movements): array
+    {
+        $refs = $movements->pluck('reference')->filter()->unique()->values();
+
+        if ($refs->isEmpty()) {
+            return [];
+        }
+
+        return Sale::whereIn('number', $refs)->with('items')->get()
+            ->mapWithKeys(fn (Sale $sale) => [
+                $sale->number => $sale->items->map(function ($item) {
+                    $qty = (float) $item->quantity;
+
+                    return $qty > 1
+                        ? $item->description.' ×'.rtrim(rtrim(number_format($qty, 2), '0'), '.')
+                        : $item->description;
+                })->implode(' + '),
+            ])->all();
+    }
+
+    /** @param  array<string, string>  $saleDetails */
+    protected function movementPayload(CashMovement $movement, array $saleDetails = []): array
     {
         $company = request()->attributes->get('tenant_company');
 
@@ -266,6 +300,8 @@ class CashController extends ApiController
             'payment_method_label' => CashMovement::paymentMethods()[$movement->payment_method]
                 ?? $movement->payment_method,
             'concept' => $movement->concept,
+            // Qué incluyó la venta (si el movimiento es una venta).
+            'detail' => $movement->reference ? ($saleDetails[$movement->reference] ?? null) : null,
             'amount' => (float) $movement->amount,
             'reference' => $movement->reference,
             'created_at' => ShopTime::iso($movement->created_at, $company),

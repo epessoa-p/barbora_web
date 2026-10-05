@@ -8,13 +8,12 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
 /**
- * Datos de la barbería que salen en el comprobante: logo, dirección, teléfono,
- * correo y el texto del pie.
+ * «Mi empresa»: los datos de la barbería que la propia barbería administra —
+ * nombre, logo, dirección, teléfono, correo y el pie del comprobante.
  *
- * El nombre y el NIT NO se editan desde aquí. Son los datos con los que el
- * operador verifica la identidad de quien pide soporte (por ejemplo, un cambio
- * de contraseña del dueño): si el propio cliente pudiera cambiarlos, esa
- * verificación dejaría de valer. Se cambian desde el panel del operador.
+ * El NIT NO se edita desde aquí: es el dato con el que el operador verifica la
+ * identidad de quien pide soporte (por ejemplo, un cambio de contraseña del
+ * dueño). El nombre sí es editable por la barbería.
  */
 class CompanyProfileController extends Controller
 {
@@ -28,6 +27,9 @@ class CompanyProfileController extends Controller
         $company = $this->company($request);
 
         $data = $request->validate([
+            // El formulario siempre manda el nombre; «sometimes» deja que una
+            // petición parcial (p. ej. solo el logo) no lo exija.
+            'name' => ['sometimes', 'required', 'string', 'max:255'],
             'address' => ['nullable', 'string', 'max:255'],
             'phone' => ['nullable', 'string', 'max:30'],
             'email' => ['nullable', 'email', 'max:255'],
@@ -57,6 +59,8 @@ class CompanyProfileController extends Controller
 
         try {
             $company->update([
+                // Solo se cambia el nombre si la petición lo trae.
+                ...(array_key_exists('name', $data) ? ['name' => $data['name']] : []),
                 'address' => $data['address'] ?? null,
                 'phone' => $data['phone'] ?? null,
                 'email' => $data['email'] ?? null,

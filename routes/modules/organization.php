@@ -20,24 +20,23 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-Route::prefix('admin/users')->name('users.')->group(function () {
-    Route::get('/', [UserController::class, 'index'])->middleware('check-permission:users.view')->name('index');
-    Route::get('/create', [UserController::class, 'create'])->middleware('check-permission:users.create')->name('create');
-    Route::post('/', [UserController::class, 'store'])->middleware('check-permission:users.create')->name('store');
-    Route::get('/{user}', [UserController::class, 'show'])->middleware('check-permission:users.view')->name('show');
-    Route::get('/{user}/edit', [UserController::class, 'edit'])->middleware('check-permission:users.edit')->name('edit');
-    Route::put('/{user}', [UserController::class, 'update'])->middleware('check-permission:users.edit')->name('update');
-    Route::delete('/{user}', [UserController::class, 'destroy'])->middleware('check-permission:users.delete')->name('destroy');
-    Route::post('/{user}/assign-role/{company}/{role}', [UserController::class, 'assignRole'])
-        ->middleware('check-permission:users.edit')->name('assign-role');
+// Usuarios es pantalla del OPERADOR del SaaS: solo el superadmin. Las empresas
+// gestionan a su gente (y sus cuentas de acceso) desde Personal, no desde aquí.
+Route::prefix('admin/users')->name('users.')->middleware('check-role:super_admin')->group(function () {
+    Route::get('/', [UserController::class, 'index'])->name('index');
+    Route::get('/create', [UserController::class, 'create'])->name('create');
+    Route::post('/', [UserController::class, 'store'])->name('store');
+    Route::get('/{user}', [UserController::class, 'show'])->name('show');
+    Route::get('/{user}/edit', [UserController::class, 'edit'])->name('edit');
+    Route::put('/{user}', [UserController::class, 'update'])->name('update');
+    Route::delete('/{user}', [UserController::class, 'destroy'])->name('destroy');
+    Route::post('/{user}/assign-role/{company}/{role}', [UserController::class, 'assignRole'])->name('assign-role');
 });
 
 Route::prefix('admin/cargos')->name('cargos.')->group(function () {
     Route::get('/', [CargoController::class, 'index'])->middleware('check-permission:cargos.view')->name('index');
     Route::get('/create', [CargoController::class, 'create'])->middleware('check-permission:cargos.create')->name('create');
     Route::post('/', [CargoController::class, 'store'])->middleware('check-permission:cargos.create')->name('store');
-    Route::get('/role-permissions/{role}', [CargoController::class, 'rolePermissions'])
-        ->middleware('check-permission:cargos.create,cargos.edit')->name('role-permissions');
     Route::get('/{cargo}/edit', [CargoController::class, 'edit'])->middleware('check-permission:cargos.edit')->name('edit');
     Route::put('/{cargo}', [CargoController::class, 'update'])->middleware('check-permission:cargos.edit')->name('update');
     Route::delete('/{cargo}', [CargoController::class, 'destroy'])->middleware('check-permission:cargos.delete')->name('destroy');

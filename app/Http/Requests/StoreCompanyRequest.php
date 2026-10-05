@@ -30,6 +30,9 @@ class StoreCompanyRequest extends FormRequest
             'email' => 'nullable|email|max:255',
             'description' => 'nullable|string',
             'active' => 'sometimes|boolean',
+            // El logo lo guarda el controlador (no se mass-assignea el archivo).
+            'logo' => ['nullable', 'image', 'mimes:png,jpg,jpeg,webp', 'max:1024'],
+            'remove_logo' => ['nullable', 'boolean'],
         ];
     }
 
@@ -43,6 +46,8 @@ class StoreCompanyRequest extends FormRequest
             'currency.required' => 'Selecciona la moneda de la empresa',
             'currency.in' => 'La moneda seleccionada no está disponible',
             'timezone.required' => 'Selecciona la zona horaria de la empresa',
+            'logo.max' => 'El logo no puede pesar más de 1 MB.',
+            'logo.mimes' => 'El logo tiene que ser PNG, JPG o WEBP.',
         ];
     }
 }

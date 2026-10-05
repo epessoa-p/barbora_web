@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\V1\BookingController;
 use App\Http\Controllers\Api\V1\CashController;
 use App\Http\Controllers\Api\V1\CatalogController;
 use App\Http\Controllers\Api\V1\MyController;
+use App\Http\Controllers\Api\V1\ReportController;
 use App\Http\Controllers\Api\V1\SaleController;
 use Illuminate\Support\Facades\Route;
 
@@ -52,6 +53,13 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::get('/services', [CatalogController::class, 'services'])
             ->middleware('check-permission:services.view')->name('services');
+
+        Route::get('/service-categories', [CatalogController::class, 'serviceCategories'])
+            ->middleware('check-permission:services.view')->name('service-categories');
+
+        // Editar un servicio (precio, duración, nombre…) desde el móvil.
+        Route::put('/services/{service}', [CatalogController::class, 'updateService'])
+            ->middleware('check-permission:services.edit')->name('services.update');
 
         // Reservar: barberos, huecos libres y alta de la cita. Las reglas son
         // las de la web (App\Support\AppointmentBooker).
@@ -130,6 +138,13 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/{sale}', [SaleController::class, 'show'])
             ->middleware('check-permission:sales.view')->name('show');
     });
+
+    // ── Reportes (módulo de plan «estadisticas») ────────────────────────────
+    // Reusan el mismo cálculo que la web; el móvil los pinta con una pantalla.
+    Route::get('/reports/{type}', [ReportController::class, 'show'])
+        ->middleware(['plan:estadisticas', 'check-permission:reports.view'])
+        ->whereIn('type', array_keys(ReportController::TYPES))
+        ->name('reports.show');
 
     // ── Lo mío ──────────────────────────────────────────────────────────────
     // Sin check-permission: son los datos del propio usuario, y el controlador

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Caja;
 use App\Models\CashSession;
 use App\Models\PaymentMethod;
+use App\Models\Personal;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -18,7 +19,12 @@ class CashSessionController extends Controller
     {
         $cajas = Caja::where('active', true)->orderBy('name')->get();
 
-        $caja = $cajas->firstWhere('id', $request->integer('caja')) ?? $cajas->first();
+        // Sin caja en la URL, se prefiere la asignada al personal del usuario;
+        // si no tiene una propia, la primera de la lista (la general).
+        $myPersonalId = Personal::where('user_id', auth()->id())->value('id');
+        $default = ($myPersonalId ? $cajas->firstWhere('personal_id', $myPersonalId) : null) ?? $cajas->first();
+
+        $caja = $cajas->firstWhere('id', $request->integer('caja')) ?? $default;
 
         $session = $caja?->sessions()->open()->with(['movements.creator', 'openedBy'])->first();
 

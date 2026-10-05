@@ -26,11 +26,11 @@
             @csrf
 
             <div class="form-group">
-                <label for="email" class="form-label">Email</label>
+                <label for="email" class="form-label">Correo o usuario</label>
                 <div class="input-group">
-                    <span class="input-group-text"><i class="bi bi-envelope"></i></span>
-                    <input type="email" id="email" name="email" class="form-control @error('email') is-invalid @enderror"
-                           placeholder="correo@ejemplo.com" value="{{ old('email') }}" required>
+                    <span class="input-group-text"><i class="bi bi-person"></i></span>
+                    <input type="text" id="email" name="email" class="form-control @error('email') is-invalid @enderror"
+                           placeholder="correo@ejemplo.com o tu usuario" value="{{ old('email') }}" required autocomplete="username">
                 </div>
             </div>
 

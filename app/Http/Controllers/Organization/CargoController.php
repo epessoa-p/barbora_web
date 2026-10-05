@@ -14,12 +14,15 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Cargos de una empresa y el rol del que heredan permisos.
+ * Cargos de una empresa y su rol de permisos.
  *
- * Invariante de este controlador: desde aquí NUNCA se toca el catálogo global.
- * Una empresa sólo puede asignar roles disponibles para ella (los del sistema
- * menos super_admin, más los suyos) y sólo puede reescribir los permisos de un
- * rol que le pertenece. Los roles del sistema se editan en Plataforma → Roles.
+ * Cada cargo tiene su PROPIO rol, dueño la empresa: al crear un cargo se crea
+ * un rol nuevo dentro de la empresa con los permisos marcados. Nunca se elige
+ * ni se toca un rol del catálogo global (eso cambiaría los permisos de todas
+ * las empresas). Los roles del sistema se editan en Plataforma → Roles.
+ *
+ * Si un cargo heredado apuntaba a un rol del sistema (datos antiguos), al
+ * editarlo se le crea un rol propio y se desengancha del compartido.
  */
 class CargoController extends Controller
 {
@@ -56,8 +59,9 @@ class CargoController extends Controller
 
         try {
             DB::transaction(function () use ($validated, $companyId, $request) {
-                $role = $this->resolveRole($validated, $companyId);
-                $this->syncRolePermissions($role, $validated, $companyId);
+                // Un cargo nuevo nace con su propio rol, dueño la empresa.
+                $role = $this->createCompanyRole($validated['name'], $companyId);
+                $this->syncRolePermissions($role, $validated);
 
                 Cargo::create([
                     'company_id' => $companyId,
@@ -98,8 +102,10 @@ class CargoController extends Controller
 
         try {
             DB::transaction(function () use ($validated, $cargo, $companyId, $request) {
-                $role = $this->resolveRole($validated, $companyId);
-                $this->syncRolePermissions($role, $validated, $companyId);
+                // Se editan los permisos del rol propio del cargo; si heredaba
+                // uno del sistema, se le crea uno propio y se desengancha.
+                $role = $this->companyRoleForUpdate($cargo, $validated['name'], $companyId);
+                $this->syncRolePermissions($role, $validated);
 
                 $cargo->update([
                     'company_id' => $companyId,
@@ -133,25 +139,6 @@ class CargoController extends Controller
         return redirect()->route('cargos.index')->with('success', 'Cargo eliminado exitosamente.');
     }
 
-    /**
-     * AJAX: permisos del rol elegido, para precargar las casillas del formulario.
-     * Acotado a los roles que la empresa puede asignar: si no, cualquier usuario
-     * con cargos.create podría leer los permisos del rol super_admin.
-     */
-    public function rolePermissions(Role $role)
-    {
-        $companyId = $this->cargoCompanyId();
-
-        if (! Role::assignableBy($companyId)->whereKey($role->id)->exists()) {
-            abort(404);
-        }
-
-        return response()->json([
-            'permissions' => $role->permissions()->grantableByCompany()->pluck('permissions.id'),
-            'editable' => $role->permissionsEditableBy($companyId),
-        ]);
-    }
-
     /* ---------------------------------------------------------------------
      | Internos
      |--------------------------------------------------------------------- */
@@ -178,7 +165,6 @@ class CargoController extends Controller
 
         return [
             'cargo' => null,
-            'roles' => Role::assignableBy($companyId)->orderBy('company_id')->orderBy('name')->get(),
             // Los permisos de plataforma nunca se conceden desde un cargo.
             'permissions' => Permission::grantableByCompany()->orderBy('module')->get()->groupBy('module'),
             'companies' => $authUser->is_super_admin
@@ -191,9 +177,6 @@ class CargoController extends Controller
     {
         return $request->validate([
             'company_id' => ['nullable', 'exists:companies,id'],
-            'role_mode' => ['required', 'in:existing,new'],
-            'role_id' => ['required_if:role_mode,existing', 'nullable', 'integer'],
-            'new_role_name' => ['required_if:role_mode,new', 'nullable', 'string', 'max:255'],
             'name' => [
                 'required',
                 'string',
@@ -209,46 +192,45 @@ class CargoController extends Controller
         ]);
     }
 
-    /**
-     * Devuelve el rol del cargo, creándolo si hace falta. Un rol nuevo nace
-     * SIEMPRE como propiedad de la empresa, nunca en el catálogo del sistema.
-     */
-    protected function resolveRole(array $validated, int $companyId): Role
+    /** Crea un rol nuevo, dueño la empresa, con el nombre del cargo. */
+    protected function createCompanyRole(string $cargoName, int $companyId): Role
     {
-        if ($validated['role_mode'] === 'new') {
-            $name = trim($validated['new_role_name']);
+        $name = trim($cargoName);
 
-            return Role::create([
-                'company_id' => $companyId,
-                'name' => $name,
-                'slug' => Role::generateSlug($name, $companyId),
-            ]);
-        }
-
-        $role = Role::assignableBy($companyId)->find($validated['role_id']);
-
-        if (! $role) {
-            throw ValidationException::withMessages([
-                'role_id' => 'Ese rol no está disponible para tu empresa.',
-            ]);
-        }
-
-        return $role;
+        return Role::create([
+            'company_id' => $companyId,
+            'name' => $name,
+            'slug' => Role::generateSlug($name, $companyId),
+        ]);
     }
 
     /**
-     * Aplica los permisos marcados, pero SÓLO sobre un rol propio de la empresa.
+     * El rol sobre el que se guardan los permisos al editar un cargo.
      *
-     * Sobre un rol del sistema no se escribe nunca: reescribirlo cambiaría los
-     * permisos de todas las empresas que lo usan. El formulario ya deshabilita
-     * las casillas en ese caso (y entonces ni siquiera manda 'permissions'), así
-     * que sólo se devuelve el error cuando la petición insiste en cambiarlos.
+     * Si el cargo ya tiene un rol propio de la empresa, se reutiliza. Si
+     * heredaba uno del sistema (compartido por todas), se le crea uno propio
+     * para no tocar el catálogo global.
      */
-    protected function syncRolePermissions(Role $role, array $validated, int $companyId): void
+    protected function companyRoleForUpdate(Cargo $cargo, string $cargoName, int $companyId): Role
     {
-        // La comparación se hace sólo sobre el universo que el formulario pinta:
-        // los permisos de plataforma que un rol del sistema pueda tener quedan
-        // fuera y no cuentan como cambio.
+        $role = $cargo->role;
+
+        if ($role && $role->permissionsEditableBy($companyId)) {
+            return $role;
+        }
+
+        return $this->createCompanyRole($cargoName, $companyId);
+    }
+
+    /**
+     * Aplica los permisos marcados al rol (siempre propio de la empresa).
+     *
+     * Sólo se guardan los permisos concedibles desde un cargo: los de
+     * plataforma (companies, plans, roles…) se descartan aquí, aunque la
+     * petición los incluya.
+     */
+    protected function syncRolePermissions(Role $role, array $validated): void
+    {
         $grantable = Permission::grantableByCompany()->pluck('id')
             ->map(fn ($id) => (int) $id)->all();
 
@@ -256,23 +238,6 @@ class CargoController extends Controller
             ->map(fn ($id) => (int) $id)
             ->intersect($grantable)
             ->unique()->sort()->values()->all();
-
-        if (! $role->permissionsEditableBy($companyId)) {
-            $current = $role->permissions()->pluck('permissions.id')
-                ->map(fn ($id) => (int) $id)
-                ->intersect($grantable)
-                ->unique()->sort()->values()->all();
-
-            if (array_key_exists('permissions', $validated) && $submitted !== $current) {
-                throw ValidationException::withMessages([
-                    'permissions' => 'Los roles del sistema los comparten todas las empresas, '
-                        . 'así que no se pueden modificar desde aquí. Crea un rol propio '
-                        . 'para definir tus permisos.',
-                ]);
-            }
-
-            return;
-        }
 
         $role->permissions()->sync($submitted);
     }

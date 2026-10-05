@@ -49,111 +49,142 @@ class RoleOwnershipTest extends TestCase
     }
 
     /* ---------------------------------------------------------------------
-     | El agujero original
+     | Cada cargo, su propio rol de la empresa
      |--------------------------------------------------------------------- */
 
-    public function test_una_empresa_no_reescribe_los_permisos_de_un_rol_del_sistema(): void
-    {
-        $cargo = $this->cargoEn($this->barberiaA, 'Barbero', $this->rolDelSistema);
-        $sales = $this->permission('sales.create');
-
-        $response = $this->actingInCompany($this->adminA, $this->barberiaA)
-            ->put(route('cargos.update', $cargo), [
-                'role_mode' => 'existing',
-                'role_id' => $this->rolDelSistema->id,
-                'name' => 'Barbero',
-                'active' => 1,
-                'permissions' => [$sales->id],
-            ]);
-
-        $response->assertSessionHasErrors('permissions');
-
-        // El rol global sigue exactamente igual para todo el SaaS.
-        $this->assertSame(
-            ['appointments.view'],
-            $this->rolDelSistema->permissions()->pluck('slug')->all()
-        );
-    }
-
-    public function test_una_empresa_si_edita_los_permisos_de_un_rol_propio(): void
-    {
-        $rolPropio = Role::factory()->ownedBy($this->barberiaA)->create(['name' => 'Supervisor']);
-        $cargo = $this->cargoEn($this->barberiaA, 'Supervisor', $rolPropio);
-        $sales = $this->permission('sales.create');
-
-        $this->actingInCompany($this->adminA, $this->barberiaA)
-            ->put(route('cargos.update', $cargo), [
-                'role_mode' => 'existing',
-                'role_id' => $rolPropio->id,
-                'name' => 'Supervisor',
-                'active' => 1,
-                'permissions' => [$sales->id],
-            ])
-            ->assertRedirect(route('cargos.index'));
-
-        $this->assertSame(['sales.create'], $rolPropio->permissions()->pluck('slug')->all());
-    }
-
-    public function test_un_rol_creado_desde_un_cargo_pertenece_a_la_empresa(): void
+    public function test_un_cargo_crea_su_propio_rol_en_la_empresa(): void
     {
         $this->actingInCompany($this->adminA, $this->barberiaA)
             ->post(route('cargos.store'), [
-                'role_mode' => 'new',
-                'new_role_name' => 'Jefe de piso',
                 'name' => 'Jefe de piso',
                 'active' => 1,
                 'permissions' => [$this->permission('appointments.view')->id],
             ])
             ->assertRedirect(route('cargos.index'));
 
-        $rol = Role::where('name', 'Jefe de piso')->firstOrFail();
+        $cargo = Cargo::where('name', 'Jefe de piso')->firstOrFail();
+        $rol = $cargo->role;
 
-        $this->assertSame($this->barberiaA->id, $rol->company_id, 'El rol nuevo debe nacer dentro de la empresa.');
+        $this->assertSame($this->barberiaA->id, $rol->company_id, 'El rol nace dentro de la empresa.');
         $this->assertFalse($rol->isSystem());
+        $this->assertSame(['appointments.view'], $rol->permissions()->pluck('slug')->all());
+    }
+
+    public function test_el_formulario_de_cargo_no_deja_elegir_rol(): void
+    {
+        $response = $this->actingInCompany($this->adminA, $this->barberiaA)
+            ->get(route('cargos.create'))
+            ->assertOk();
+
+        $response->assertSee('Datos del cargo');
+        $response->assertSee('Permisos del rol');
+        // Ya no hay selección de rol: cada cargo crea el suyo.
+        $response->assertDontSee('Rol existente');
+        $response->assertDontSee('name="role_id"', false);
+    }
+
+    /**
+     * El agujero original: antes, elegir un rol del sistema y marcar permisos
+     * reescribía ese rol para TODAS las empresas. Ahora el cargo crea su propio
+     * rol y el del sistema no se toca, aunque se llamen igual.
+     */
+    public function test_un_cargo_no_toca_el_rol_del_sistema_aunque_se_llame_igual(): void
+    {
+        $this->actingInCompany($this->adminA, $this->barberiaA)
+            ->post(route('cargos.store'), [
+                'name' => 'Barbero', // mismo nombre que el rol del sistema
+                'active' => 1,
+                'permissions' => [$this->permission('sales.create')->id],
+            ])
+            ->assertRedirect(route('cargos.index'));
+
+        $rolDelCargo = Cargo::where('name', 'Barbero')->firstOrFail()->role;
+
+        // El rol del cargo es propio de la empresa, no el compartido.
+        $this->assertSame($this->barberiaA->id, $rolDelCargo->company_id);
+        $this->assertNotSame($this->rolDelSistema->id, $rolDelCargo->id);
+
+        // Y el rol del sistema sigue exactamente igual para todo el SaaS.
+        $this->assertSame(
+            ['appointments.view'],
+            $this->rolDelSistema->permissions()->pluck('slug')->all()
+        );
+    }
+
+    public function test_al_editar_un_cargo_se_editan_los_permisos_de_su_rol_propio(): void
+    {
+        $rolPropio = Role::factory()->ownedBy($this->barberiaA)->create(['name' => 'Supervisor']);
+        $cargo = $this->cargoEn($this->barberiaA, 'Supervisor', $rolPropio);
+        $sales = $this->permission('sales.create');
+
+        $this->actingInCompany($this->adminA, $this->barberiaA)
+            ->put(route('cargos.update', $cargo), [
+                'name' => 'Supervisor',
+                'active' => 1,
+                'permissions' => [$sales->id],
+            ])
+            ->assertRedirect(route('cargos.index'));
+
+        $cargo->refresh();
+
+        // Se editó el MISMO rol (no se creó otro) y quedó con el permiso nuevo.
+        $this->assertSame($rolPropio->id, $cargo->role_id);
+        $this->assertSame(['sales.create'], $rolPropio->permissions()->pluck('slug')->all());
+    }
+
+    /**
+     * Un cargo heredado (datos antiguos) que apunta a un rol del sistema: al
+     * editarlo se le crea un rol propio y se desengancha, sin tocar el global.
+     */
+    public function test_al_editar_un_cargo_heredado_del_sistema_se_le_crea_un_rol_propio(): void
+    {
+        $cargo = $this->cargoEn($this->barberiaA, 'Barbero', $this->rolDelSistema);
+        $sales = $this->permission('sales.create');
+
+        $this->actingInCompany($this->adminA, $this->barberiaA)
+            ->put(route('cargos.update', $cargo), [
+                'name' => 'Barbero',
+                'active' => 1,
+                'permissions' => [$sales->id],
+            ])
+            ->assertRedirect(route('cargos.index'));
+
+        $cargo->refresh();
+
+        // Ya no apunta al rol del sistema, sino a uno propio con el permiso nuevo.
+        $this->assertNotSame($this->rolDelSistema->id, $cargo->role_id);
+        $this->assertSame($this->barberiaA->id, $cargo->role->company_id);
+        $this->assertSame(['sales.create'], $cargo->role->permissions()->pluck('slug')->all());
+
+        // El rol del sistema, intacto para el resto del SaaS.
+        $this->assertSame(
+            ['appointments.view'],
+            $this->rolDelSistema->permissions()->pluck('slug')->all()
+        );
     }
 
     /* ---------------------------------------------------------------------
      | Escalada de privilegios
      |--------------------------------------------------------------------- */
 
-    public function test_no_se_asigna_el_rol_super_admin_a_un_cargo(): void
-    {
-        $superAdmin = Role::factory()->create(['name' => 'Super Administrador', 'slug' => Role::SUPER_ADMIN]);
-        $superAdmin->permissions()->sync(Permission::pluck('id'));
-
-        $this->actingInCompany($this->adminA, $this->barberiaA)
-            ->post(route('cargos.store'), [
-                'role_mode' => 'existing',
-                'role_id' => $superAdmin->id,
-                'name' => 'Dueño',
-                'active' => 1,
-            ])
-            ->assertSessionHasErrors('role_id');
-
-        $this->assertDatabaseMissing('cargos', ['name' => 'Dueño']);
-    }
-
     public function test_no_se_conceden_permisos_de_plataforma_desde_un_cargo(): void
     {
-        $rolPropio = Role::factory()->ownedBy($this->barberiaA)->create(['name' => 'Supervisor']);
-        $cargo = $this->cargoEn($this->barberiaA, 'Supervisor', $rolPropio);
-
         $platform = $this->permission('companies.create');
         $legit = $this->permission('appointments.view');
 
         $this->actingInCompany($this->adminA, $this->barberiaA)
-            ->put(route('cargos.update', $cargo), [
-                'role_mode' => 'existing',
-                'role_id' => $rolPropio->id,
+            ->post(route('cargos.store'), [
                 'name' => 'Supervisor',
                 'active' => 1,
                 'permissions' => [$platform->id, $legit->id],
             ])
             ->assertRedirect(route('cargos.index'));
 
+        $rol = Cargo::where('name', 'Supervisor')->firstOrFail()->role;
+
         $this->assertSame(
             ['appointments.view'],
-            $rolPropio->permissions()->pluck('slug')->all(),
+            $rol->permissions()->pluck('slug')->all(),
             'Los permisos del operador no se conceden desde un cargo.'
         );
     }
@@ -162,79 +193,29 @@ class RoleOwnershipTest extends TestCase
      | Aislamiento entre empresas
      |--------------------------------------------------------------------- */
 
-    public function test_una_empresa_solo_ve_sus_roles_y_los_del_sistema(): void
-    {
-        $propio = Role::factory()->ownedBy($this->barberiaA)->create(['name' => 'Mi Supervisor']);
-        $ajeno = Role::factory()->ownedBy($this->barberiaB)->create(['name' => 'Supervisor Ajeno']);
-        $superAdmin = Role::factory()->create(['name' => 'Super Administrador', 'slug' => Role::SUPER_ADMIN]);
-
-        $response = $this->actingInCompany($this->adminA, $this->barberiaA)
-            ->get(route('cargos.create'))
-            ->assertOk();
-
-        $roles = $response->viewData('roles')->pluck('id');
-
-        $this->assertTrue($roles->contains($propio->id), 'Debe ver su propio rol.');
-        $this->assertTrue($roles->contains($this->rolDelSistema->id), 'Debe ver los del sistema.');
-        $this->assertFalse($roles->contains($ajeno->id), 'No debe ver el rol de otra barbería.');
-        $this->assertFalse($roles->contains($superAdmin->id), 'No debe ver el rol del operador.');
-    }
-
-    public function test_no_se_asigna_un_rol_de_otra_empresa(): void
-    {
-        $ajeno = Role::factory()->ownedBy($this->barberiaB)->create(['name' => 'Supervisor Ajeno']);
-
-        $this->actingInCompany($this->adminA, $this->barberiaA)
-            ->post(route('cargos.store'), [
-                'role_mode' => 'existing',
-                'role_id' => $ajeno->id,
-                'name' => 'Copiado',
-                'active' => 1,
-            ])
-            ->assertSessionHasErrors('role_id');
-
-        $this->assertDatabaseMissing('cargos', ['name' => 'Copiado']);
-    }
-
-    public function test_no_se_leen_los_permisos_de_un_rol_ajeno(): void
-    {
-        $ajeno = Role::factory()->ownedBy($this->barberiaB)->create(['name' => 'Supervisor Ajeno']);
-        $superAdmin = Role::factory()->create(['name' => 'Super Administrador', 'slug' => Role::SUPER_ADMIN]);
-
-        $this->actingInCompany($this->adminA, $this->barberiaA)
-            ->get(route('cargos.role-permissions', $ajeno))
-            ->assertNotFound();
-
-        $this->actingInCompany($this->adminA, $this->barberiaA)
-            ->get(route('cargos.role-permissions', $superAdmin))
-            ->assertNotFound();
-
-        $this->actingInCompany($this->adminA, $this->barberiaA)
-            ->get(route('cargos.role-permissions', $this->rolDelSistema))
-            ->assertOk()
-            ->assertJsonPath('editable', false);
-    }
-
-    public function test_dos_empresas_pueden_llamar_igual_a_su_rol(): void
+    public function test_dos_empresas_pueden_llamar_igual_a_su_cargo(): void
     {
         $adminB = $this->userInCompany($this->barberiaB, ['cargos.create'], 'admin_b');
 
         foreach ([[$this->adminA, $this->barberiaA], [$adminB, $this->barberiaB]] as [$user, $company]) {
             $this->actingInCompany($user, $company)
                 ->post(route('cargos.store'), [
-                    'role_mode' => 'new',
-                    'new_role_name' => 'Supervisor',
                     'name' => 'Supervisor',
                     'active' => 1,
                 ])
                 ->assertRedirect(route('cargos.index'));
         }
 
-        $slugs = Role::where('name', 'Supervisor')->orderBy('company_id')->pluck('slug', 'company_id');
+        // Cada empresa tiene su cargo y su rol propio; el slug no compite entre ellas.
+        $roles = Cargo::allCompanies()->where('name', 'Supervisor')->with('role')->get()
+            ->pluck('role');
 
-        $this->assertCount(2, $slugs);
-        $this->assertSame('supervisor', $slugs[$this->barberiaA->id]);
-        $this->assertSame('supervisor', $slugs[$this->barberiaB->id], 'El slug no compite entre empresas.');
+        $this->assertCount(2, $roles);
+        $this->assertSame(
+            [$this->barberiaA->id, $this->barberiaB->id],
+            $roles->pluck('company_id')->sort()->values()->all()
+        );
+        $this->assertSame(['supervisor', 'supervisor'], $roles->pluck('slug')->all());
     }
 
     /* ---------------------------------------------------------------------
@@ -285,8 +266,11 @@ class RoleOwnershipTest extends TestCase
      | Altas de usuarios
      |--------------------------------------------------------------------- */
 
-    public function test_no_se_da_de_alta_un_usuario_en_una_empresa_ajena(): void
+    public function test_una_empresa_no_da_de_alta_usuarios_desde_la_pantalla_de_usuarios(): void
     {
+        // La pantalla de Usuarios es solo del superadmin. Un admin de empresa
+        // no llega a ella (403), así que no hay vector de alta ni de escalada:
+        // su gente la crea desde Personal, con el rol que fija el cargo.
         $admin = $this->userInCompany($this->barberiaA, ['users.create'], 'alta_a');
 
         $this->actingInCompany($admin, $this->barberiaA)
@@ -298,15 +282,15 @@ class RoleOwnershipTest extends TestCase
                 'company_id' => $this->barberiaB->id,
                 'role_id' => $this->rolDelSistema->id,
             ])
-            ->assertSessionHasErrors('company_id');
+            ->assertForbidden();
 
         $this->assertDatabaseMissing('users', ['email' => 'infiltrado@test.test']);
     }
 
-    public function test_no_se_da_de_alta_un_usuario_como_super_admin_del_sistema(): void
+    public function test_una_empresa_no_asigna_roles_desde_la_pantalla_de_usuarios(): void
     {
         $superAdminRole = Role::factory()->create(['name' => 'Super Administrador', 'slug' => Role::SUPER_ADMIN]);
-        $admin = $this->userInCompany($this->barberiaA, ['users.create'], 'alta_a');
+        $admin = $this->userInCompany($this->barberiaA, ['users.create', 'users.edit'], 'alta_a');
 
         $this->actingInCompany($admin, $this->barberiaA)
             ->post(route('users.store'), [
@@ -318,28 +302,9 @@ class RoleOwnershipTest extends TestCase
                 'company_id' => $this->barberiaA->id,
                 'role_id' => $superAdminRole->id,
             ])
-            ->assertSessionHasErrors('role_id');
+            ->assertForbidden();
 
         $this->assertDatabaseMissing('users', ['email' => 'aspirante@test.test']);
-    }
-
-    public function test_un_administrador_no_puede_marcar_a_nadie_como_super_admin(): void
-    {
-        $admin = $this->userInCompany($this->barberiaA, ['users.create'], 'alta_a');
-
-        $this->actingInCompany($admin, $this->barberiaA)
-            ->post(route('users.store'), [
-                'name' => 'ayudante',
-                'email' => 'ayudante@test.test',
-                'password' => 'Secreto@1234',
-                'password_confirmation' => 'Secreto@1234',
-                'is_super_admin' => 1,
-                'company_id' => $this->barberiaA->id,
-                'role_id' => $this->rolDelSistema->id,
-            ])
-            ->assertRedirect(route('users.index'));
-
-        $this->assertFalse((bool) User::where('email', 'ayudante@test.test')->firstOrFail()->is_super_admin);
     }
 
     public function test_no_se_asigna_el_rol_del_operador_a_un_usuario(): void

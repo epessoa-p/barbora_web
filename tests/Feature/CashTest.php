@@ -6,6 +6,7 @@ use App\Models\Caja;
 use App\Models\CashMovement;
 use App\Models\CashSession;
 use App\Models\Company;
+use App\Models\Personal;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -307,5 +308,61 @@ class CashTest extends TestCase
         $this->actingInCompany($user, $mia)
             ->post(route('cash.open'), ['caja_id' => $cajaAjena->id, 'opening_amount' => 100])
             ->assertSessionHasErrors('caja_id');
+    }
+
+    // ── Caja asignada a un personal ───────────────────────────────────────────
+
+    public function test_la_pantalla_de_caja_ofrece_asignar_personal(): void
+    {
+        $company = $this->companyWithPlan(planAttributes: ['features' => ['caja']]);
+        $user = $this->userInCompany($company, ['cajas.create'], 'cajas_admin');
+
+        $this->actingInCompany($user, $company)
+            ->get(route('cajas.create'))
+            ->assertOk()
+            ->assertSee('Personal asignado');
+    }
+
+    public function test_se_crea_una_caja_asignada_a_un_personal(): void
+    {
+        $company = $this->companyWithPlan(planAttributes: ['features' => ['caja']]);
+        $personal = $this->inCompany($company, fn () => Personal::create([
+            'company_id' => $company->id, 'full_name' => 'Tania Molina', 'active' => true,
+        ]));
+        $user = $this->userInCompany($company, ['cajas.create'], 'cajas_admin');
+
+        $this->actingInCompany($user, $company)
+            ->post(route('cajas.store'), [
+                'name' => 'Caja de Tania',
+                'personal_id' => $personal->id,
+                'active' => 1,
+            ])
+            ->assertRedirect(route('cajas.index'));
+
+        $this->assertDatabaseHas('cajas', [
+            'company_id' => $company->id,
+            'name' => 'Caja de Tania',
+            'personal_id' => $personal->id,
+        ]);
+    }
+
+    public function test_no_se_asigna_una_caja_a_un_personal_de_otra_empresa(): void
+    {
+        $company = $this->companyWithPlan(planAttributes: ['features' => ['caja']]);
+        $otra = $this->companyWithPlan();
+        $ajeno = $this->inCompany($otra, fn () => Personal::create([
+            'company_id' => $otra->id, 'full_name' => 'Ajeno', 'active' => true,
+        ]));
+        $user = $this->userInCompany($company, ['cajas.create'], 'cajas_admin');
+
+        $this->actingInCompany($user, $company)
+            ->post(route('cajas.store'), [
+                'name' => 'Caja intrusa',
+                'personal_id' => $ajeno->id,
+                'active' => 1,
+            ])
+            ->assertSessionHasErrors('personal_id');
+
+        $this->assertDatabaseMissing('cajas', ['name' => 'Caja intrusa']);
     }
 }

@@ -13,8 +13,10 @@ class LoginRequest extends FormRequest
 
     public function rules(): array
     {
+        // El campo "email" acepta correo O nombre de usuario; el LoginController
+        // decide cuál es según el formato. Por eso no se valida como email.
         return [
-            'email' => 'required|email|max:255',
+            'email' => 'required|string|max:255',
             'password' => 'required|string|min:6',
         ];
     }
@@ -22,8 +24,7 @@ class LoginRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'email.required' => 'El email es requerido',
-            'email.email' => 'El email debe ser válido',
+            'email.required' => 'Escribe tu correo o nombre de usuario',
             'password.required' => 'La contraseña es requerida',
             'password.min' => 'La contraseña debe tener al menos 6 caracteres',
         ];

@@ -8,9 +8,11 @@ use App\Http\Resources\ServiceResource;
 use App\Models\Client;
 use App\Models\Product;
 use App\Models\Service;
+use App\Models\ServiceCategory;
 use App\Support\ShopTime;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 /**
  * Catálogo de apoyo para la app: servicios y clientes.
@@ -29,6 +31,60 @@ class CatalogController extends ApiController
             ->get();
 
         return $this->json(['data' => ServiceResource::collection($services)->resolve()]);
+    }
+
+    /** Categorías de servicios, para elegir al editar desde el móvil. */
+    public function serviceCategories(): JsonResponse
+    {
+        $categories = ServiceCategory::where('active', true)
+            ->orderBy('sort_order')->orderBy('name')
+            ->get(['id', 'name']);
+
+        return $this->json(['data' => $categories->map(fn ($c) => [
+            'id' => $c->id, 'name' => $c->name,
+        ])->all()]);
+    }
+
+    /**
+     * Editar un servicio desde el móvil (precio, duración, nombre…).
+     *
+     * Mismas reglas que la web (App\Http\Controllers\Services\ServiceController).
+     * El binding {service} ya está acotado a la empresa activa.
+     */
+    public function updateService(Request $request, Service $service): JsonResponse
+    {
+        $companyId = $service->company_id;
+
+        $data = $request->validate([
+            'name' => [
+                'required', 'string', 'max:255',
+                Rule::unique('services', 'name')
+                    ->where(fn ($q) => $q->where('company_id', $companyId))
+                    ->ignore($service->id),
+            ],
+            'service_category_id' => [
+                'nullable',
+                Rule::exists('service_categories', 'id')->where('company_id', $companyId),
+            ],
+            'description' => ['nullable', 'string', 'max:255'],
+            'duration_minutes' => ['required', 'integer', 'min:5', 'max:600'],
+            'price' => ['required', 'numeric', 'min:0'],
+            'active' => ['sometimes', 'boolean'],
+        ], [
+            'name.unique' => 'Ya existe un servicio con ese nombre.',
+            'duration_minutes.min' => 'La duración mínima es de 5 minutos.',
+            'duration_minutes.max' => 'La duración máxima es de 10 horas.',
+        ]);
+
+        $data['active'] = $request->boolean('active', (bool) $service->active);
+
+        $service->update($data);
+        $service->load('category');
+
+        return $this->json([
+            'message' => 'Servicio actualizado.',
+            'data' => (new ServiceResource($service))->resolve(),
+        ]);
     }
 
     /**

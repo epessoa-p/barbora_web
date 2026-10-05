@@ -190,6 +190,21 @@ La ficha del cliente va aparte, en el módulo de clientes:
 visita). El binding `{client}` va acotado a la empresa activa, así que una ficha
 de otra barbería responde 404. Lo cubre `ApiBookingTest`.
 
+El catálogo y los reportes también se editan/consultan desde el móvil:
+
+| Ruta | Permiso | Para qué |
+|---|---|---|
+| `PUT /services/{id}` | `services.edit` | Editar un servicio (precio, duración, nombre, estado) |
+| `GET /service-categories` | `services.view` | Categorías, para el editor |
+| `GET /reports/{type}` | `reports.view` (plan `estadisticas`) | Reporte en formato uniforme (resumen + tablas). `type`: ventas, servicios, barberos, productos, clientes, ganancias |
+
+Los **reportes** reusan el mismo cálculo que la web (`App\Support\Reports\*`) y lo
+entregan como `{summary:[{label,value,kind}], tables:[{title,columns,rows}]}`; los
+importes van como número y la app les pone el símbolo. Al **cobrar**, cada ítem
+admite `items[].personal_id` para atribuir el servicio a un barbero (comisión), y
+el movimiento de caja de cada venta trae ya su `detail` (qué incluyó) y
+`created_by`. Lo cubren `ApiReportsTest`, `ApiBookingTest` y `ApiCashTest`.
+
 `/booking/services` existe aparte de `/services` porque recepción reserva sin
 tener `services.view`. La promesa que cubre `ApiBookingTest`: **toda hora que
 `slots` ofrece es una hora que `POST /appointments` acepta** — los dos salen de

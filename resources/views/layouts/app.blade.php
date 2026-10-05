@@ -40,7 +40,7 @@
                 ['show' => $authUser->is_super_admin, 'route' => 'companies.index', 'pattern' => 'companies.*', 'icon' => 'bi-building', 'label' => 'Empresas'],
                 ['show' => $authUser->is_super_admin, 'route' => 'plans.index', 'pattern' => 'plans.*', 'icon' => 'bi-box-seam', 'label' => 'Planes'],
                 ['show' => $authUser->is_super_admin, 'route' => 'roles.index', 'pattern' => 'roles.*', 'icon' => 'bi-shield-lock', 'label' => 'Roles'],
-                ['show' => $can('users.view'), 'route' => 'users.index', 'pattern' => 'users.*', 'icon' => 'bi-person-gear', 'label' => 'Usuarios'],
+                ['show' => $authUser->is_super_admin, 'route' => 'users.index', 'pattern' => 'users.*', 'icon' => 'bi-person-gear', 'label' => 'Usuarios'],
             ],
         ],
         [
@@ -141,7 +141,7 @@
                 ['show' => $can('cajas.view') && $hasModule('caja'), 'route' => 'cajas.index', 'pattern' => 'cajas.*', 'icon' => 'bi-safe', 'label' => 'Cajas'],
                 // Administrativo: una barbería configura cómo cobra aunque solo
                 // tenga contratada la agenda.
-                ['show' => $can('settings.view') && $currentCompany, 'route' => 'company-profile.edit', 'pattern' => 'company-profile.*', 'icon' => 'bi-shop', 'label' => 'Datos de la barbería'],
+                ['show' => $can('settings.view') && $currentCompany, 'route' => 'company-profile.edit', 'pattern' => 'company-profile.*', 'icon' => 'bi-shop', 'label' => 'Mi empresa'],
                 ['show' => $can('settings.view'), 'route' => 'payment-methods.index', 'pattern' => 'payment-methods.*', 'icon' => 'bi-credit-card', 'label' => 'Métodos de pago'],
             ],
         ],
@@ -155,11 +155,7 @@
 <div class="app-shell d-flex">
     <aside class="app-sidebar" id="appSidebar">
         <div class="sidebar-brand">
-            <img src="{{ asset('img/logo.svg') }}" alt="Barbora" class="brand-icon">
-            <div>
-                <div class="brand-title">BARBORA</div>
-                <small class="text-muted">{{ $currentCompany?->name ?? 'Plataforma' }}</small>
-            </div>
+            @include('layouts.partials.brand')
         </div>
 
         @include('layouts.partials.nav', ['navSections' => $navSections, 'idPrefix' => 'side'])
@@ -173,9 +169,6 @@
                             aria-label="Mostrar u ocultar el menú">
                         <i class="bi bi-list"></i>
                     </button>
-
-                    <span class="topbar-label">Overview</span>
-                    <span class="topbar-separator">|</span>
 
                     @if($isGlobalMode)
                         <span class="topbar-context">Modo Global</span>
@@ -327,11 +320,7 @@
 <div class="offcanvas offcanvas-start app-offcanvas" tabindex="-1" id="appSidebarMobile" aria-labelledby="appSidebarMobileLabel">
     <div class="offcanvas-header">
         <div class="sidebar-brand m-0 p-0 border-0">
-            <img src="{{ asset('img/logo.svg') }}" alt="Barbora" class="brand-icon">
-            <div>
-                <div class="brand-title" id="appSidebarMobileLabel">BARBORA</div>
-                <small class="text-muted">{{ $currentCompany?->name ?? 'Plataforma' }}</small>
-            </div>
+            @include('layouts.partials.brand', ['titleId' => 'appSidebarMobileLabel'])
         </div>
         <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Cerrar"></button>
     </div>

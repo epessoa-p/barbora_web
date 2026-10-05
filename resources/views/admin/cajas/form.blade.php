@@ -42,7 +42,7 @@
                         @error('code')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
 
-                    <div class="col-12">
+                    <div class="col-md-6">
                         <label class="form-label">Sucursal</label>
                         <select name="branch_id" class="form-select @error('branch_id') is-invalid @enderror">
                             <option value="">Sin sucursal asignada</option>
@@ -53,6 +53,20 @@
                             @endforeach
                         </select>
                         @error('branch_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+
+                    <div class="col-md-6">
+                        <label class="form-label">Personal asignado</label>
+                        <select name="personal_id" class="form-select @error('personal_id') is-invalid @enderror">
+                            <option value="">Sin asignar (caja general)</option>
+                            @foreach($personals as $person)
+                                <option value="{{ $person->id }}" {{ (string) old('personal_id', $caja?->personal_id) === (string) $person->id ? 'selected' : '' }}>
+                                    {{ $person->full_name }}
+                                </option>
+                            @endforeach
+                        </select>
+                        <small class="text-muted">Déjalo en blanco para una caja compartida.</small>
+                        @error('personal_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
 
                     <div class="col-12">

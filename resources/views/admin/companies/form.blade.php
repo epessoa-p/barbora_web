@@ -9,7 +9,7 @@
 
 <div class="card mt-4">
     <div class="card-body">
-        <form action="{{ $company ? route('companies.update', $company) : route('companies.store') }}" method="POST">
+        <form action="{{ $company ? route('companies.update', $company) : route('companies.store') }}" method="POST" enctype="multipart/form-data">
             @csrf
             @if($company)
                 @method('PUT')
@@ -95,6 +95,28 @@
                     <textarea id="description" name="description" rows="3"
                               class="form-control @error('description') is-invalid @enderror">{{ old('description', $company?->description) }}</textarea>
                     @error('description')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                </div>
+
+                <div class="col-12">
+                    <label for="logo" class="form-label">Logo</label>
+                    <div class="d-flex align-items-center gap-3">
+                        @if($company?->logoUrl())
+                            <img src="{{ $company->logoUrl() }}" alt="Logo de {{ $company->name }}"
+                                 style="height:56px;width:56px;object-fit:contain;border:1px solid #dee2e6;border-radius:8px;background:#fff;">
+                        @endif
+                        <div class="flex-grow-1">
+                            <input type="file" id="logo" name="logo" accept="image/png,image/jpeg,image/webp"
+                                   class="form-control @error('logo') is-invalid @enderror">
+                            <small class="text-muted">PNG, JPG o WEBP, hasta 1 MB.</small>
+                            @error('logo')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        </div>
+                    </div>
+                    @if($company?->logoUrl())
+                        <div class="form-check mt-2">
+                            <input class="form-check-input" type="checkbox" id="remove_logo" name="remove_logo" value="1">
+                            <label class="form-check-label" for="remove_logo">Quitar el logo actual</label>
+                        </div>
+                    @endif
                 </div>
 
                 @if(! $company && isset($plans))

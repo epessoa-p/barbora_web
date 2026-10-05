@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Cash;
 use App\Http\Controllers\Controller;
 use App\Models\Caja;
 use App\Models\Branch;
+use App\Models\Personal;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
@@ -21,6 +22,7 @@ class CajaController extends Controller
     {
         return view('admin.cajas.create', [
             'branches' => Branch::where('active', true)->orderBy('name')->get(),
+            'personals' => Personal::where('active', true)->orderBy('full_name')->get(),
         ]);
     }
 
@@ -45,6 +47,7 @@ class CajaController extends Controller
         return view('admin.cajas.edit', [
             'caja' => $caja,
             'branches' => Branch::where('active', true)->orderBy('name')->get(),
+            'personals' => Personal::where('active', true)->orderBy('full_name')->get(),
         ]);
     }
 
@@ -78,6 +81,7 @@ class CajaController extends Controller
             'name'        => 'required|string|max:255',
             'code'        => 'nullable|string|max:50',
             'branch_id'   => ['nullable', Rule::exists('branches', 'id')->where('company_id', $companyId)],
+            'personal_id' => ['nullable', Rule::exists('personal', 'id')->where('company_id', $companyId)],
             'description' => 'nullable|string',
             'active'      => 'boolean',
         ];
