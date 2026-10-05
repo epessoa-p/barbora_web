@@ -16,7 +16,9 @@
 
             <div class="form-group mb-3">
                 <label for="email" class="form-label">Email</label>
-                <input type="email" id="email" name="email" class="form-control @error('email') is-invalid @enderror" value="{{ old('email', $user->email) }}" disabled>
+                {{-- Editable: un input «disabled» no se envía, y la validación
+                     exige el email → antes guardar fallaba con «email requerido». --}}
+                <input type="email" id="email" name="email" class="form-control @error('email') is-invalid @enderror" value="{{ old('email', $user->email) }}" required>
             </div>
 
             <div class="form-group mb-3">

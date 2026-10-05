@@ -74,4 +74,27 @@ class UserListTest extends TestCase
             ->assertSee('huerfano@test.test')
             ->assertSee('Sin barbería');
     }
+
+    public function test_se_edita_un_usuario_conservando_su_email(): void
+    {
+        $super = User::factory()->create(['is_super_admin' => true]);
+        $user = User::factory()->create(['name' => 'barbero1', 'email' => 'barbero@demo.test']);
+
+        // Reproduce el caso del formulario: el email viaja con su valor actual.
+        $this->actingAs($super)
+            ->put(route('users.update', $user), [
+                'name' => 'barbero_editado',
+                'email' => 'barbero@demo.test',
+                'phone' => '70000000',
+            ])
+            ->assertRedirect(route('users.index'))
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('users', [
+            'id' => $user->id,
+            'name' => 'barbero_editado',
+            'email' => 'barbero@demo.test',
+            'phone' => '70000000',
+        ]);
+    }
 }
