@@ -196,7 +196,15 @@ El catálogo y los reportes también se editan/consultan desde el móvil:
 |---|---|---|
 | `PUT /services/{id}` | `services.edit` | Editar un servicio (precio, duración, nombre, estado) |
 | `GET /service-categories` | `services.view` | Categorías, para el editor |
-| `GET /reports/{type}` | `reports.view` (plan `estadisticas`) | Reporte en formato uniforme (resumen + tablas). `type`: ventas, servicios, barberos, productos, clientes, ganancias |
+| `GET /reports/{type}` | `reports.view` (plan `estadisticas`) | Reporte en formato uniforme (resumen + **charts** + tablas). `type`: ventas, servicios, barberos, productos, clientes, ganancias |
+| `GET /personal` | `personal.view` | Barberos (activos e inactivos), para gestionarlos |
+| `GET /cargos` | `personal.view` | Cargos, para el selector al crear/editar un barbero |
+| `POST /personal` | `personal.create` | Alta de barbero (sin cuenta de acceso: eso va por la web) |
+| `PUT /personal/{id}` | `personal.edit` | Editar la ficha del barbero |
+
+El reporte incluye `charts` (series para gráficos de línea/barras en el móvil),
+además de `summary` y `tables`. Lo cubren `ApiReportsTest`, `ApiPersonalTest`,
+`ApiBookingTest` y `ApiCashTest`.
 
 Los **reportes** reusan el mismo cálculo que la web (`App\Support\Reports\*`) y lo
 entregan como `{summary:[{label,value,kind}], tables:[{title,columns,rows}]}`; los

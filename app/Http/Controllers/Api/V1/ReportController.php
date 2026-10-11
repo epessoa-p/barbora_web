@@ -54,6 +54,7 @@ class ReportController extends ApiController
             'title' => self::TYPES[$type],
             'period' => $this->period($request, $period),
             'summary' => $payload['summary'],
+            'charts' => $payload['charts'] ?? [],
             'tables' => $payload['tables'],
             'note' => $payload['note'] ?? null,
         ]);
@@ -66,6 +67,9 @@ class ReportController extends ApiController
         $r = app(SalesReport::class)->for($period);
         $t = $r['totals'];
 
+        $daily = collect($r['daily']);
+        $byMethod = collect($r['byMethod']);
+
         return [
             'summary' => [
                 $this->stat('Ventas', $t['sales'], 'int'),
@@ -74,6 +78,12 @@ class ReportController extends ApiController
                 $this->stat('Propinas', $t['tip'], 'money'),
                 $this->stat('Descuentos', $t['discount'], 'money'),
                 $this->stat('Anuladas', $t['cancelled'], 'int'),
+            ],
+            'charts' => [
+                $this->chart('line', 'Ventas por día',
+                    $daily->pluck('label')->all(), $daily->pluck('total')->all()),
+                $this->chart('bar', 'Por método de pago',
+                    $byMethod->pluck('method')->all(), $byMethod->pluck('total')->all()),
             ],
             'tables' => [
                 $this->table('Por método de pago',
@@ -104,6 +114,9 @@ class ReportController extends ApiController
                 $this->stat('No-show', $a['no_show'], 'int'),
                 $this->stat('Asistencia', $a['attendance_rate'], 'percent'),
             ],
+            'charts' => [
+                $this->topChart('Servicios con más ingresos', $r['rows'], 'service'),
+            ],
             'tables' => [
                 $this->table('Ranking de servicios',
                     [$this->col('Servicio'), $this->col('Veces', 'int', 'end'), $this->col('Ingresos', 'money', 'end'), $this->col('Promedio', 'money', 'end')],
@@ -122,6 +135,11 @@ class ReportController extends ApiController
                 $this->stat('Comisiones', $r['totals']['commissions'], 'money'),
                 $this->stat('Propinas', $r['totals']['tips'], 'money'),
                 $this->stat('Atendidas', $r['totals']['attended'], 'int'),
+            ],
+            'charts' => [
+                $this->chart('bar', 'Ingresos por barbero',
+                    collect($r['rows'])->take(8)->map(fn ($x) => $this->firstName($x['personal']->full_name ?? '—'))->all(),
+                    collect($r['rows'])->take(8)->pluck('revenue')->all()),
             ],
             'tables' => [
                 $this->table('Por barbero',
@@ -148,13 +166,17 @@ class ReportController extends ApiController
                 $this->stat('Costo', $r['totals']['cost'], 'money'),
                 $this->stat('Margen', $r['totals']['margin'], 'money'),
             ],
+            'charts' => [
+                $this->topChart('Productos con más ingresos', $r['rows'], 'product'),
+            ],
             'tables' => [
                 $this->table('Ranking de productos',
                     [$this->col('Producto'), $this->col('Cant.', 'int', 'end'), $this->col('Ingresos', 'money', 'end'), $this->col('Margen', 'money', 'end')],
                     collect($r['rows'])->map(fn ($x) => [$x['product'], $x['quantity'], $x['revenue'], $x['margin']])),
+                // lowStock() ya devuelve arrays, no modelos Stock.
                 $this->table('Stock bajo',
-                    [$this->col('Producto'), $this->col('Existencia', 'int', 'end')],
-                    collect($r['lowStock'])->map(fn ($s) => [$s->product?->name ?? '—', (float) $s->quantity])),
+                    [$this->col('Producto'), $this->col('Existencia', 'text', 'end')],
+                    collect($r['lowStock'])->map(fn ($s) => [$s['product'], $s['quantity']])),
             ],
         ];
     }
@@ -172,6 +194,9 @@ class ReportController extends ApiController
                 $this->stat('Recurrencia', $s['returning_rate'], 'percent'),
                 $this->stat('Ingresos', $s['revenue'], 'money'),
                 $this->stat('Clientes', $s['total'], 'int'),
+            ],
+            'charts' => [
+                $this->topChart('Clientes que más gastan', $r['top'], 'client', 'spent'),
             ],
             'tables' => [
                 $this->table('Top clientes',
@@ -199,6 +224,14 @@ class ReportController extends ApiController
                 $this->stat('Margen', $r['margin_pct'], 'percent'),
                 $this->stat('Propinas', $r['tips'], 'money'),
             ],
+            'charts' => [
+                $this->chart('line', 'Ingresos por día',
+                    collect($r['daily'])->pluck('label')->all(),
+                    collect($r['daily'])->pluck('total')->all()),
+                $this->chart('bar', 'Ingresos vs gastos',
+                    ['Ingresos', 'Costo', 'Comisiones', 'Otros', 'Neto'],
+                    [$r['revenue'], $r['product_cost'], $r['commissions'], $r['other_expenses'], $r['net']]),
+            ],
             'tables' => [],
         ];
     }
@@ -224,6 +257,37 @@ class ReportController extends ApiController
     protected function stat(string $label, $value, string $kind): array
     {
         return ['label' => $label, 'value' => $value, 'kind' => $kind];
+    }
+
+    /**
+     * Un gráfico de una serie. `type`: 'line' (serie en el tiempo) o 'bar'
+     * (comparación entre categorías). Los importes van como número.
+     *
+     * @param  array<int, string>       $labels
+     * @param  array<int, float|int>    $data
+     */
+    protected function chart(string $type, string $title, array $labels, array $data): array
+    {
+        return [
+            'type' => $type,
+            'title' => $title,
+            'labels' => array_values($labels),
+            'data' => array_map(fn ($v) => (float) $v, array_values($data)),
+            'kind' => 'money',
+        ];
+    }
+
+    /** Barras del top (por ingreso) de un ranking: $key es el nombre, $value el valor. */
+    protected function topChart(string $title, $rows, string $key, string $value = 'revenue'): array
+    {
+        $top = collect($rows)->take(8);
+
+        return $this->chart('bar', $title, $top->pluck($key)->all(), $top->pluck($value)->all());
+    }
+
+    protected function firstName(string $full): string
+    {
+        return explode(' ', trim($full))[0] ?: $full;
     }
 
     protected function col(string $label, string $kind = 'text', string $align = 'start'): array

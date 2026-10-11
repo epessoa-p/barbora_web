@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\V1\BookingController;
 use App\Http\Controllers\Api\V1\CashController;
 use App\Http\Controllers\Api\V1\CatalogController;
 use App\Http\Controllers\Api\V1\MyController;
+use App\Http\Controllers\Api\V1\PersonalController;
 use App\Http\Controllers\Api\V1\ReportController;
 use App\Http\Controllers\Api\V1\SaleController;
 use Illuminate\Support\Facades\Route;
@@ -81,6 +82,18 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/appointments/{appointment}', [BookingController::class, 'update'])
             ->middleware('check-permission:appointments.edit')->name('appointments.update');
     });
+
+    // ── Barberos (personal) ─────────────────────────────────────────────────
+    // Administrativo: sin plan, solo permiso. La cuenta de acceso (usuario) se
+    // sigue gestionando en la web; aquí se administra la ficha del barbero.
+    Route::get('/personal', [PersonalController::class, 'index'])
+        ->middleware('check-permission:personal.view')->name('personal');
+    Route::get('/cargos', [PersonalController::class, 'cargos'])
+        ->middleware('check-permission:personal.view')->name('cargos');
+    Route::post('/personal', [PersonalController::class, 'store'])
+        ->middleware('check-permission:personal.create')->name('personal.store');
+    Route::put('/personal/{personal}', [PersonalController::class, 'update'])
+        ->middleware('check-permission:personal.edit')->name('personal.update');
 
     // Alta rápida de cliente al reservar (módulo «clientes»).
     Route::post('/clients', [BookingController::class, 'storeClient'])

@@ -3,7 +3,10 @@
 namespace Tests\Feature;
 
 use App\Models\Company;
+use App\Models\Product;
+use App\Models\Stock;
 use App\Models\User;
+use App\Models\Warehouse;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -44,6 +47,7 @@ class ApiReportsTest extends TestCase
             ->assertJsonStructure([
                 'period' => ['label', 'from', 'to', 'presets'],
                 'summary' => [['label', 'value', 'kind']],
+                'charts' => [['type', 'title', 'labels', 'data']],
                 'tables' => [['title', 'columns', 'rows']],
             ]);
     }
@@ -57,6 +61,43 @@ class ApiReportsTest extends TestCase
                 ->assertOk()
                 ->assertJsonPath('key', $type);
         }
+    }
+
+    public function test_el_reporte_de_productos_no_falla_con_stock_bajo(): void
+    {
+        // Reproduce el 500: con un producto bajo mínimo, la tabla «Stock bajo»
+        // llega como arrays, no como modelos Stock.
+        $this->inCompany($this->company, function () {
+            $warehouse = Warehouse::create([
+                'company_id' => $this->company->id,
+                'name' => 'Almacén',
+                'code' => 'ALM-1',
+            ]);
+            $product = Product::create([
+                'company_id' => $this->company->id,
+                'name' => 'Pomada Clasica',
+                'unit' => 'unidad',
+                'cost_price' => 10,
+                'sale_price' => 20,
+                'min_stock' => 5,
+                'is_sellable' => true,
+                'track_stock' => true,
+                'active' => true,
+            ]);
+            Stock::create([
+                'company_id' => $this->company->id,
+                'warehouse_id' => $warehouse->id,
+                'product_id' => $product->id,
+                'quantity' => 2, // por debajo del mínimo
+            ]);
+        });
+
+        Sanctum::actingAs($this->gerente);
+
+        $this->getJson('/api/v1/reports/productos?preset=mes', $this->headers())
+            ->assertOk()
+            ->assertJsonPath('key', 'productos')
+            ->assertSee('Pomada Clasica');
     }
 
     public function test_un_reporte_desconocido_da_404(): void
