@@ -6,6 +6,7 @@ use App\Http\Resources\AppointmentResource;
 use App\Models\AgendaBlock;
 use App\Models\Appointment;
 use App\Models\Company;
+use App\Models\Personal;
 use App\Support\ShopTime;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -21,23 +22,37 @@ use Illuminate\Validation\Rule;
  */
 class AgendaController extends ApiController
 {
-    /** Citas de un día, opcionalmente de un solo barbero. */
+    /**
+     * Citas de un día (o de un rango, con `to`), opcionalmente de un barbero.
+     *
+     * La vista de semana del móvil manda `day` y `to`; sin `to` es un solo día.
+     */
     public function index(Request $request): JsonResponse
     {
-        $day = $this->parseDay($request->query('day'));
+        [$from, $to] = $this->range($request);
 
         $appointments = Appointment::with(['client', 'personal', 'services', 'branch'])
-            ->onDay($day)
+            ->whereBetween('starts_at', [$from->copy()->startOfDay(), $to->copy()->endOfDay()])
             ->when($request->integer('personal_id'), fn ($q, $id) => $q->where('personal_id', $id))
             ->when($request->query('status'), fn ($q, $status) => $q->where('status', $status))
             ->orderBy('starts_at')
             ->get();
 
         return $this->json([
-            'day' => $day->toDateString(),
+            'day' => $from->toDateString(),
+            'from' => $from->toDateString(),
+            'to' => $to->toDateString(),
             'data' => AppointmentResource::collection($appointments)->resolve(),
             'summary' => $this->summarize($appointments),
-            'blocks' => $this->blocksFor($day, $request->attributes->get('tenant_company')),
+            'blocks' => $this->blocksFor($from, $to, $request->attributes->get('tenant_company')),
+            // Para el filtro por barbero del móvil: quien puede ver la agenda
+            // puede ver quiénes atienden, sin pedir otro permiso.
+            'staff' => Personal::bookable()->orderBy('full_name')->get()
+                ->map(fn (Personal $p) => [
+                    'id' => $p->id,
+                    'full_name' => $p->full_name,
+                    'agenda_color' => $p->agenda_color,
+                ])->all(),
         ]);
     }
 
@@ -96,10 +111,33 @@ class AgendaController extends ApiController
     }
 
     /** Vacaciones y feriados del día: la app tiene que poder avisar. */
-    protected function blocksFor(Carbon $day, ?Company $company): array
+    /**
+     * El rango pedido: `day` (inicio) y `to` (fin, opcional). Sin `to`, o con
+     * un `to` anterior a `day`, es un solo día. Se acota a 31 días para que
+     * nadie pida un año entero desde el móvil.
+     *
+     * @return array{0: Carbon, 1: Carbon}
+     */
+    protected function range(Request $request): array
+    {
+        $from = $this->parseDay($request->query('day'));
+        $to = $request->filled('to') ? $this->parseDay($request->query('to')) : $from->copy();
+
+        if ($to->lessThan($from)) {
+            $to = $from->copy();
+        }
+
+        if ($from->diffInDays($to) > 31) {
+            $to = $from->copy()->addDays(31);
+        }
+
+        return [$from, $to];
+    }
+
+    protected function blocksFor(Carbon $from, Carbon $to, ?Company $company): array
     {
         return AgendaBlock::with('personal')
-            ->between($day->copy()->startOfDay(), $day->copy()->endOfDay())
+            ->between($from->copy()->startOfDay(), $to->copy()->endOfDay())
             ->orderBy('starts_at')
             ->get()
             ->map(fn (AgendaBlock $block) => [

@@ -64,16 +64,28 @@ class MyController extends ApiController
             return $this->noProfile();
         }
 
-        $day = $this->parseDay($request->query('day'));
+        // Un día, o un rango con `to` (vista de semana). Acotado a 31 días.
+        $from = $this->parseDay($request->query('day'));
+        $to = $request->filled('to') ? $this->parseDay($request->query('to')) : $from->copy();
+
+        if ($to->lessThan($from)) {
+            $to = $from->copy();
+        }
+
+        if ($from->diffInDays($to) > 31) {
+            $to = $from->copy()->addDays(31);
+        }
 
         $appointments = Appointment::with(['client', 'services', 'branch'])
             ->where('personal_id', $personal->id)
-            ->onDay($day)
+            ->whereBetween('starts_at', [$from->copy()->startOfDay(), $to->copy()->endOfDay()])
             ->orderBy('starts_at')
             ->get();
 
         return $this->json([
-            'day' => $day->toDateString(),
+            'day' => $from->toDateString(),
+            'from' => $from->toDateString(),
+            'to' => $to->toDateString(),
             'personal_id' => $personal->id,
             'data' => AppointmentResource::collection($appointments)->resolve(),
             'summary' => [

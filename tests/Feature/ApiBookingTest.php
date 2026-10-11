@@ -434,6 +434,64 @@ class ApiBookingTest extends TestCase
         $this->getJson("/api/v1/clients/{$ajeno->id}", $this->headers())->assertNotFound();
     }
 
+    public function test_la_agenda_devuelve_una_semana_con_to(): void
+    {
+        $lunes = $this->day()->startOfWeek();
+
+        $this->inCompany($this->company, function () use ($lunes) {
+            foreach ([0, 3, 6] as $offset) {
+                Appointment::create([
+                    'company_id' => $this->company->id,
+                    'personal_id' => $this->barber->id,
+                    'client_id' => $this->client->id,
+                    'starts_at' => $lunes->copy()->addDays($offset)->setTime(9, 0),
+                    'ends_at' => $lunes->copy()->addDays($offset)->setTime(10, 0),
+                    'status' => 'reservada',
+                ]);
+            }
+        });
+
+        Sanctum::actingAs($this->recepcion);
+
+        // Un solo día: solo la del lunes.
+        $this->getJson('/api/v1/agenda?day='.$lunes->toDateString(), $this->headers())
+            ->assertOk()->assertJsonCount(1, 'data');
+
+        // La semana completa: las tres.
+        $this->getJson('/api/v1/agenda?day='.$lunes->toDateString().'&to='.$lunes->copy()->addDays(6)->toDateString(), $this->headers())
+            ->assertOk()
+            ->assertJsonCount(3, 'data')
+            ->assertJsonPath('to', $lunes->copy()->addDays(6)->toDateString());
+    }
+
+    public function test_la_agenda_se_filtra_por_barbero(): void
+    {
+        $otro = $this->inCompany($this->company, fn () => Personal::create([
+            'company_id' => $this->company->id, 'full_name' => 'Diego', 'active' => true, 'bookable' => true,
+        ]));
+
+        $this->inCompany($this->company, function () use ($otro) {
+            foreach ([$this->barber->id, $otro->id] as $i => $pid) {
+                Appointment::create([
+                    'company_id' => $this->company->id,
+                    'personal_id' => $pid,
+                    'client_id' => $this->client->id,
+                    'starts_at' => $this->day()->setTime(9 + $i, 0),
+                    'ends_at' => $this->day()->setTime(10 + $i, 0),
+                    'status' => 'reservada',
+                ]);
+            }
+        });
+
+        Sanctum::actingAs($this->recepcion);
+
+        $data = $this->getJson('/api/v1/agenda?day='.$this->day()->toDateString().'&personal_id='.$otro->id, $this->headers())
+            ->assertOk()->json('data');
+
+        $this->assertCount(1, $data);
+        $this->assertSame($otro->id, $data[0]['personal']['id']);
+    }
+
     public function test_se_edita_un_servicio_desde_el_movil(): void
     {
         $editor = $this->userInCompany($this->company, ['services.view', 'services.edit'], 'editor_api');
