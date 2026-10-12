@@ -11,7 +11,7 @@
 
             <div class="form-group mb-3">
                 <label for="name" class="form-label">Nombre</label>
-                <input type="text" id="name" name="name" class="form-control @error('name') is-invalid @enderror" value="{{ old('name', $user->name) }}" required>
+                <input type="text" id="name" name="name" class="form-control @error('name') is-invalid @enderror" data-no-upper value="{{ old('name', $user->name) }}" required>
             </div>
 
             <div class="form-group mb-3">
