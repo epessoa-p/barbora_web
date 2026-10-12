@@ -166,7 +166,8 @@ class CargoController extends Controller
         return [
             'cargo' => null,
             // Los permisos de plataforma nunca se conceden desde un cargo.
-            'permissions' => Permission::grantableByCompany()->orderBy('module')->get()->groupBy('module'),
+            // y Usuarios/Roles solo los ve el superadmin.
+            'permissions' => Permission::grantableBy($authUser)->orderBy('module')->get()->groupBy('module'),
             'companies' => $authUser->is_super_admin
                 ? Company::orderBy('name')->get()
                 : collect([$authUser->getCurrentCompany()])->filter(),
@@ -225,21 +226,31 @@ class CargoController extends Controller
     /**
      * Aplica los permisos marcados al rol (siempre propio de la empresa).
      *
-     * Sólo se guardan los permisos concedibles desde un cargo: los de
-     * plataforma (companies, plans, roles…) se descartan aquí, aunque la
-     * petición los incluya.
+     * Sólo se guardan los permisos que quien edita puede conceder: los de
+     * plataforma (companies, plans…) se descartan aquí aunque la petición los
+     * incluya, y Usuarios/Roles solo los concede el superadmin.
+     *
+     * Lo que el editor no ve no se le borra: si el superadmin dio Usuarios a
+     * un cargo y luego lo edita la empresa, ese permiso se conserva.
      */
     protected function syncRolePermissions(Role $role, array $validated): void
     {
-        $grantable = Permission::grantableByCompany()->pluck('id')
+        $grantable = Permission::grantableBy(auth()->user())->pluck('id')
             ->map(fn ($id) => (int) $id)->all();
 
         $submitted = collect($validated['permissions'] ?? [])
             ->map(fn ($id) => (int) $id)
-            ->intersect($grantable)
-            ->unique()->sort()->values()->all();
+            ->intersect($grantable);
 
-        $role->permissions()->sync($submitted);
+        $hidden = $role->permissions()
+            ->whereIn('module', Permission::SUPER_ADMIN_MODULES)
+            ->pluck('permissions.id')
+            ->map(fn ($id) => (int) $id)
+            ->diff($grantable);
+
+        $role->permissions()->sync(
+            $submitted->merge($hidden)->unique()->sort()->values()->all()
+        );
     }
 
     protected function authorizeCargo(Cargo $cargo): void

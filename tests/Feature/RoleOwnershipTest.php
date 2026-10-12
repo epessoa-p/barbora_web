@@ -189,6 +189,95 @@ class RoleOwnershipTest extends TestCase
         );
     }
 
+    /**
+     * Usuarios y Roles son del superadmin: la empresa gestiona a su gente con
+     * Personal y Cargos. Ni los ve en el formulario ni los puede colar.
+     */
+    public function test_una_empresa_no_ve_ni_concede_usuarios_y_roles_desde_un_cargo(): void
+    {
+        $users = $this->permission('users.view');
+        $roles = $this->permission('roles.view');
+        $legit = $this->permission('appointments.view');
+
+        $this->actingInCompany($this->adminA, $this->barberiaA)
+            ->get(route('cargos.create'))
+            ->assertOk()
+            ->assertSee('appointments.view')
+            ->assertDontSee('users.view')
+            ->assertDontSee('roles.view')
+            // Y el menú no enseña la sección de plataforma.
+            ->assertDontSee('Plataforma')
+            ->assertDontSee(route('users.index'), false);
+
+        $this->actingInCompany($this->adminA, $this->barberiaA)
+            ->post(route('cargos.store'), [
+                'name' => 'Encargado',
+                'active' => 1,
+                'permissions' => [$users->id, $roles->id, $legit->id],
+            ])
+            ->assertRedirect(route('cargos.index'));
+
+        $this->assertSame(
+            ['appointments.view'],
+            Cargo::where('name', 'Encargado')->firstOrFail()->role->permissions()->pluck('slug')->all()
+        );
+    }
+
+    public function test_el_superadmin_ve_y_concede_usuarios_y_roles_desde_un_cargo(): void
+    {
+        $users = $this->permission('users.view');
+        $roles = $this->permission('roles.view');
+        $this->permission('companies.view');
+
+        $superUser = User::factory()->create(['is_super_admin' => true]);
+
+        $this->actingInCompany($superUser, $this->barberiaA)
+            ->get(route('cargos.create'))
+            ->assertOk()
+            ->assertSee('users.view')
+            ->assertSee('roles.view')
+            ->assertDontSee('companies.view');
+
+        $this->actingInCompany($superUser, $this->barberiaA)
+            ->post(route('cargos.store'), [
+                'name' => 'Encargado',
+                'company_id' => $this->barberiaA->id,
+                'active' => 1,
+                'permissions' => [$users->id, $roles->id],
+            ])
+            ->assertRedirect(route('cargos.index'));
+
+        $this->assertEqualsCanonicalizing(
+            ['users.view', 'roles.view'],
+            Cargo::where('name', 'Encargado')->firstOrFail()->role->permissions()->pluck('slug')->all()
+        );
+    }
+
+    /** Si la empresa edita un cargo, no le borra lo que el superadmin le dio. */
+    public function test_al_editar_la_empresa_conserva_usuarios_dados_por_el_superadmin(): void
+    {
+        $users = $this->permission('users.view');
+        $legit = $this->permission('appointments.view');
+        $otro = $this->permission('sales.view');
+
+        $rol = Role::factory()->create(['name' => 'Encargado', 'slug' => 'encargado_a', 'company_id' => $this->barberiaA->id]);
+        $rol->permissions()->sync([$users->id, $legit->id]);
+        $cargo = $this->cargoEn($this->barberiaA, 'Encargado', $rol);
+
+        $this->actingInCompany($this->adminA, $this->barberiaA)
+            ->put(route('cargos.update', $cargo), [
+                'name' => 'Encargado',
+                'active' => 1,
+                'permissions' => [$otro->id],
+            ])
+            ->assertRedirect(route('cargos.index'));
+
+        $this->assertEqualsCanonicalizing(
+            ['users.view', 'sales.view'],
+            $cargo->fresh()->role->permissions()->pluck('slug')->all()
+        );
+    }
+
     /* ---------------------------------------------------------------------
      | Aislamiento entre empresas
      |--------------------------------------------------------------------- */

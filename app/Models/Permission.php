@@ -36,9 +36,34 @@ class Permission extends Model
         return in_array($this->module, self::PLATFORM_MODULES, true);
     }
 
+    /**
+     * Módulos que en un cargo solo ve y concede el superadmin. Las empresas
+     * gestionan a su gente con Personal y Cargos, no con Usuarios y Roles.
+     */
+    public const SUPER_ADMIN_MODULES = ['users', 'roles'];
+
     /** Permisos que una empresa puede conceder a sus propios roles. */
     public function scopeGrantableByCompany(Builder $query): Builder
     {
-        return $query->whereNotIn('module', self::PLATFORM_MODULES);
+        return $query->whereNotIn('module', array_values(array_unique([
+            ...self::PLATFORM_MODULES,
+            ...self::SUPER_ADMIN_MODULES,
+        ])));
+    }
+
+    /**
+     * Permisos que este usuario puede conceder desde un cargo: el superadmin
+     * suma Usuarios y Roles; empresas, planes y suscripciones nunca.
+     */
+    public function scopeGrantableBy(Builder $query, ?User $user): Builder
+    {
+        if (! $user?->is_super_admin) {
+            return $query->grantableByCompany();
+        }
+
+        return $query->whereNotIn('module', array_values(array_diff(
+            self::PLATFORM_MODULES,
+            self::SUPER_ADMIN_MODULES,
+        )));
     }
 }
