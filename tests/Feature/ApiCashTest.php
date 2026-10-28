@@ -345,6 +345,52 @@ class ApiCashTest extends TestCase
         $this->assertSame('Faltante', $response->json('data.difference_label'));
     }
 
+    public function test_el_historial_trae_los_turnos_con_su_arqueo(): void
+    {
+        $session = $this->openSession(openingAmount: 100);
+        $service = $this->service(80);
+
+        Sanctum::actingAs($this->cajero);
+        $this->withHeaders($this->headers())
+            ->postJson('/api/v1/sales', $this->salePayload($service, 80))->assertCreated();
+        $this->withHeaders($this->headers())
+            ->putJson("/api/v1/cash/session/{$session->id}/close", [
+                'closing_amount' => 175,
+                'closing_notes' => 'Faltó cambio',
+            ])->assertOk();
+
+        // Un turno nuevo, abierto, queda primero.
+        $nuevo = $this->openSession(openingAmount: 50);
+
+        $list = $this->withHeaders($this->headers())->getJson('/api/v1/cash/sessions')->assertOk();
+
+        $this->assertSame([$nuevo->id, $session->id], array_column($list->json('data'), 'id'));
+        $this->assertTrue($list->json('data.0.is_open'));
+        $this->assertSame(-5.0, $list->json('data.1.difference'));
+        $this->assertSame('Faltante', $list->json('data.1.difference_label'));
+        $this->assertSame('Faltó cambio', $list->json('data.1.closing_notes'));
+        $this->assertSame(1, $list->json('data.1.movements_count'));
+
+        $detail = $this->withHeaders($this->headers())
+            ->getJson("/api/v1/cash/sessions/{$session->id}")->assertOk();
+
+        $this->assertCount(1, $detail->json('data.movements'));
+        $this->assertSame($this->cajero->name, $detail->json('data.closed_by'));
+        $this->assertSame('Efectivo', $detail->json('data.by_payment_method.efectivo.label'));
+        $this->assertSame(80.0, $detail->json('data.by_payment_method.efectivo.income'));
+    }
+
+    public function test_no_se_ve_el_turno_de_otra_barberia(): void
+    {
+        $otra = $this->companyWithPlan(planAttributes: ['features' => self::FEATURES]);
+        $ajeno = $this->openSession($otra);
+
+        Sanctum::actingAs($this->cajero);
+
+        $this->withHeaders($this->headers())->getJson("/api/v1/cash/sessions/{$ajeno->id}")->assertNotFound();
+        $this->assertCount(0, $this->withHeaders($this->headers())->getJson('/api/v1/cash/sessions')->json('data'));
+    }
+
     public function test_un_turno_cerrado_no_se_cierra_otra_vez(): void
     {
         $session = $this->openSession();
@@ -531,6 +577,80 @@ class ApiCashTest extends TestCase
 
         $this->assertSame('Corte clásico', $sale['detail'], 'El movimiento debe decir qué incluyó la venta.');
         $this->assertSame($this->cajero->name, $sale['created_by']);
+    }
+
+    /* ---------------------------------------------------------------------
+     | Historial y anulación
+     |--------------------------------------------------------------------- */
+
+    public function test_el_historial_resume_el_periodo_sin_contar_anuladas(): void
+    {
+        $this->openSession();
+        $service = $this->service(100);
+        $anulador = $this->userInCompany($this->company, ['sales.view', 'sales.create', 'sales.delete'], 'admin_ventas');
+
+        Sanctum::actingAs($anulador);
+
+        $first = $this->withHeaders($this->headers(['Idempotency-Key' => 'h-1']))
+            ->postJson('/api/v1/sales', $this->salePayload($service, 100))->assertCreated();
+        $this->withHeaders($this->headers(['Idempotency-Key' => 'h-2']))
+            ->postJson('/api/v1/sales', $this->salePayload($service, 100))->assertCreated();
+
+        $this->withHeaders($this->headers())
+            ->patchJson("/api/v1/sales/{$first->json('data.id')}/cancel", ['cancel_reason' => 'Cobro duplicado'])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'anulada')
+            ->assertJsonPath('data.cancel_reason', 'Cobro duplicado')
+            ->assertJsonPath('data.cancelled_by', $anulador->name);
+
+        $today = Carbon::today()->toDateString();
+
+        $response = $this->withHeaders($this->headers())
+            ->getJson("/api/v1/sales?from={$today}&to={$today}")
+            ->assertOk();
+
+        $this->assertCount(2, $response->json('data'));
+        $this->assertSame(1, $response->json('summary.count'));
+        $this->assertSame(100.0, $response->json('summary.total'));
+        $this->assertSame(1, $response->json('summary.cancelled'));
+        $this->assertSame(['Efectivo'], $response->json('data.0.methods'));
+
+        // Ayer no hubo ventas.
+        $yesterday = Carbon::yesterday()->toDateString();
+        $this->assertCount(0, $this->withHeaders($this->headers())
+            ->getJson("/api/v1/sales?day={$yesterday}")->json('data'));
+    }
+
+    public function test_anular_saca_el_dinero_de_caja_y_no_se_anula_dos_veces(): void
+    {
+        $session = $this->openSession();
+        $service = $this->service(100);
+        $anulador = $this->userInCompany($this->company, ['sales.view', 'sales.create', 'sales.delete'], 'admin_ventas');
+
+        Sanctum::actingAs($anulador);
+
+        $id = $this->withHeaders($this->headers(['Idempotency-Key' => 'anular-1']))
+            ->postJson('/api/v1/sales', $this->salePayload($service, 100))->json('data.id');
+
+        $this->withHeaders($this->headers())->patchJson("/api/v1/sales/{$id}/cancel")->assertOk();
+
+        $this->assertSame(1, $session->fresh()->movements()->where('type', 'egreso')->count());
+
+        $this->withHeaders($this->headers())->patchJson("/api/v1/sales/{$id}/cancel")
+            ->assertUnprocessable();
+    }
+
+    public function test_sin_permiso_no_se_anula(): void
+    {
+        $this->openSession();
+        $service = $this->service(100);
+
+        Sanctum::actingAs($this->cajero);
+
+        $id = $this->withHeaders($this->headers(['Idempotency-Key' => 'sin-permiso']))
+            ->postJson('/api/v1/sales', $this->salePayload($service, 100))->json('data.id');
+
+        $this->withHeaders($this->headers())->patchJson("/api/v1/sales/{$id}/cancel")->assertForbidden();
     }
 
     /* ---------------------------------------------------------------------

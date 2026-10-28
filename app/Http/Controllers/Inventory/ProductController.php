@@ -5,8 +5,8 @@ namespace App\Http\Controllers\Inventory;
 use App\Http\Controllers\Controller;
 use App\Models\Product;
 use App\Models\ProductCategory;
+use App\Support\ProductForm;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 
 class ProductController extends Controller
 {
@@ -106,42 +106,9 @@ class ProductController extends Controller
         return ProductCategory::where('active', true)->orderBy('sort_order')->orderBy('name')->get();
     }
 
+    /** Las reglas son las mismas que en la API: ver ProductForm. */
     protected function validated(Request $request, ?Product $product, ?int $companyId): array
     {
-        $data = $request->validate([
-            'name' => [
-                'required', 'string', 'max:255',
-                Rule::unique('products', 'name')
-                    ->where(fn ($q) => $q->where('company_id', $companyId))
-                    ->ignore($product?->id),
-            ],
-            'sku' => [
-                'nullable', 'string', 'max:50',
-                Rule::unique('products', 'sku')
-                    ->where(fn ($q) => $q->where('company_id', $companyId))
-                    ->ignore($product?->id),
-            ],
-            'product_category_id' => [
-                'nullable',
-                Rule::exists('product_categories', 'id')->where('company_id', $companyId),
-            ],
-            'description' => 'nullable|string|max:255',
-            'unit' => ['required', Rule::in(array_keys(Product::UNITS))],
-            'cost_price' => 'required|numeric|min:0',
-            'sale_price' => 'required|numeric|min:0',
-            'min_stock' => 'required|numeric|min:0',
-            'is_sellable' => 'sometimes|boolean',
-            'track_stock' => 'sometimes|boolean',
-            'active' => 'sometimes|boolean',
-        ], [
-            'name.unique' => 'Ya existe un producto con ese nombre.',
-            'sku.unique' => 'Ese código ya está en uso.',
-        ]);
-
-        $data['is_sellable'] = $request->boolean('is_sellable');
-        $data['track_stock'] = $request->boolean('track_stock');
-        $data['active'] = $request->boolean('active');
-
-        return $data;
+        return app(ProductForm::class)->validate($request, $companyId, $product, flagsAreCheckboxes: true);
     }
 }

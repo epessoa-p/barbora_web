@@ -190,6 +190,32 @@ class CashController extends ApiController
         ]);
     }
 
+    /**
+     * Historial de turnos (abiertos y cerrados), el más reciente primero, con
+     * su arqueo: cuánto se esperaba, cuánto se contó y la diferencia.
+     */
+    public function sessions(Request $request): JsonResponse
+    {
+        $sessions = CashSession::with(['caja', 'movements', 'openedBy', 'closedBy'])
+            ->withCount('movements')
+            ->when($request->integer('caja_id'), fn ($q, $id) => $q->where('caja_id', $id))
+            ->latest('opened_at')
+            ->limit(min((int) $request->query('limit', 30), 100))
+            ->get();
+
+        return $this->json([
+            'data' => $sessions->map(fn (CashSession $s) => $this->sessionPayload($s))->all(),
+        ]);
+    }
+
+    /** Un turno con todos sus movimientos: para revisar un cierre pasado. */
+    public function showSession(CashSession $session): JsonResponse
+    {
+        $session->load(['caja', 'movements.creator', 'openedBy', 'closedBy']);
+
+        return $this->json(['data' => $this->sessionPayload($session, withMovements: true)]);
+    }
+
     /* ---------------------------------------------------------------------
      | Internos
      |--------------------------------------------------------------------- */
@@ -234,8 +260,15 @@ class CashController extends ApiController
                 'expected_cash' => $totals['expected_cash'],
                 'net' => $totals['net'],
             ],
-            'by_payment_method' => $session->byPaymentMethod(),
-            'movements_count' => $session->movements()->count(),
+            // Con el nombre de cada forma de pago, para no depender de que el
+            // móvil lo tenga (un método dado de baja ya no viene en /me).
+            'by_payment_method' => collect($session->byPaymentMethod())
+                ->map(fn (array $row, string $slug) => $row + [
+                    'label' => CashMovement::paymentMethods()[$slug] ?? ucfirst($slug),
+                ])->all(),
+            // withCount en el historial evita una consulta por turno.
+            'movements_count' => $session->movements_count ?? $session->movements()->count(),
+            'opening_notes' => $session->opening_notes,
         ];
 
         if (! $session->isOpen()) {
@@ -246,6 +279,7 @@ class CashController extends ApiController
                 'expected_amount' => (float) $session->expected_amount,
                 'difference' => (float) $session->difference,
                 'difference_label' => $session->differenceLabel(),
+                'closing_notes' => $session->closing_notes,
             ];
         }
 

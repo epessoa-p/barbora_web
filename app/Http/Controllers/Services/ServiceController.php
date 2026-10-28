@@ -5,8 +5,8 @@ namespace App\Http\Controllers\Services;
 use App\Http\Controllers\Controller;
 use App\Models\Service;
 use App\Models\ServiceCategory;
+use App\Support\ServiceForm;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 
 class ServiceController extends Controller
 {
@@ -74,36 +74,14 @@ class ServiceController extends Controller
             ->orderBy('sort_order')->orderBy('name')->get();
     }
 
+    /** Las reglas son las mismas que en la API: ver ServiceForm. */
     protected function validated(Request $request, ?Service $service = null): array
     {
-        $companyId = $service?->company_id ?? $this->targetCompanyId();
-
-        $data = $request->validate([
-            'name' => [
-                'required', 'string', 'max:255',
-                Rule::unique('services', 'name')
-                    ->where(fn ($q) => $q->where('company_id', $companyId))
-                    ->ignore($service?->id),
-            ],
-            // La categoría tiene que ser de la misma empresa.
-            'service_category_id' => [
-                'nullable',
-                Rule::exists('service_categories', 'id')->where('company_id', $companyId),
-            ],
-            'description' => 'nullable|string|max:255',
-            'duration_minutes' => 'required|integer|min:5|max:600',
-            'price' => 'required|numeric|min:0',
-            'sort_order' => 'nullable|integer|min:0',
-            'active' => 'sometimes|boolean',
-        ], [
-            'name.unique' => 'Ya existe un servicio con ese nombre.',
-            'duration_minutes.min' => 'La duración mínima es de 5 minutos.',
-            'duration_minutes.max' => 'La duración máxima es de 10 horas.',
-        ]);
-
-        $data['sort_order'] = $data['sort_order'] ?? 0;
-        $data['active'] = $request->boolean('active');
-
-        return $data;
+        return app(ServiceForm::class)->validate(
+            $request,
+            $service?->company_id ?? $this->targetCompanyId(),
+            $service,
+            activeIsCheckbox: true,
+        );
     }
 }

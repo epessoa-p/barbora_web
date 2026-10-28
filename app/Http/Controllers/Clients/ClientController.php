@@ -4,8 +4,8 @@ namespace App\Http\Controllers\Clients;
 
 use App\Http\Controllers\Controller;
 use App\Models\Client;
+use App\Support\ClientForm;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 
 class ClientController extends Controller
 {
@@ -61,34 +61,14 @@ class ClientController extends Controller
             ->with('success', 'Cliente eliminado exitosamente.');
     }
 
+    /** Las reglas son las mismas que en la API: ver ClientForm. */
     protected function validated(Request $request, ?Client $client = null): array
     {
-        $companyId = $client?->company_id ?? $this->targetCompanyId();
-
-        $data = $request->validate([
-            'full_name' => 'required|string|max:255',
-            // El documento es opcional, pero si se registra no puede repetirse
-            // dentro de la misma empresa.
-            'document_number' => [
-                'nullable', 'string', 'max:30',
-                Rule::unique('clients', 'document_number')
-                    ->where(fn ($q) => $q->where('company_id', $companyId))
-                    ->ignore($client?->id),
-            ],
-            'phone' => 'nullable|string|max:30',
-            'email' => 'nullable|email|max:255',
-            'birth_date' => 'nullable|date|before:today',
-            'preferences' => 'nullable|string|max:255',
-            'allergies' => 'nullable|string|max:255',
-            'notes' => 'nullable|string',
-            'active' => 'sometimes|boolean',
-        ], [
-            'document_number.unique' => 'Ya hay un cliente registrado con ese documento.',
-            'birth_date.before' => 'La fecha de nacimiento debe ser anterior a hoy.',
-        ]);
-
-        $data['active'] = $request->boolean('active');
-
-        return $data;
+        return app(ClientForm::class)->validate(
+            $request,
+            $client?->company_id ?? $this->targetCompanyId(),
+            $client,
+            activeIsCheckbox: true,
+        );
     }
 }

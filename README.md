@@ -178,6 +178,10 @@ bloqueos y sin pisar otra cita.
 | `POST /appointments` | `appointments.create` | Crea la cita: `personal_id, client_id, date, time, services[], notes?` |
 | `PUT /appointments/{id}` | `appointments.edit` | Reprograma (mismos campos). Una cita cerrada responde `422 appointment_closed` |
 | `POST /clients` | `clients.create` | Alta rápida: `full_name, phone?` |
+| `GET /agenda-blocks?scope=pasados&personal_id=` | `agenda_blocks.view` | Bloqueos próximos (o pasados) + `reasons`, `staff`, `branches` para el formulario |
+| `POST /agenda-blocks` | `agenda_blocks.create` | `title, reason, personal_id?, branch_id?, start_date, end_date, all_day, start_time?, end_time?, notes?`. Responde `message` y `clashes` (citas que caen dentro; no se cancelan) |
+| `PUT /agenda-blocks/{id}` | `agenda_blocks.edit` | Mismos campos. Reglas compartidas con la web en `App\Support\AgendaBlockForm` |
+| `DELETE /agenda-blocks/{id}` | `agenda_blocks.delete` | Baja (soft delete): el periodo vuelve a estar libre |
 
 La ficha del cliente va aparte, en el módulo de clientes:
 
@@ -185,6 +189,10 @@ La ficha del cliente va aparte, en el módulo de clientes:
 |---|---|---|
 | `GET /clients` | `clients.view` | Lista paginada y búsqueda (`?q=`) |
 | `GET /clients/{id}` | `clients.view` | Ficha: datos + `stats` (visitas, gasto, última visita, citas por venir) + `recent_appointments` |
+| `PUT /clients/{id}` | `clients.edit` | Editar la ficha: `full_name, phone?, email?, document_number?, birth_date?, preferences?, allergies?, notes?, active?` (`active` solo cambia si se manda). Reglas compartidas con la web en `App\Support\ClientForm` |
+
+`POST /clients` acepta los mismos campos que `PUT` (el alta rápida sigue
+mandando solo `full_name` y `phone`); nace activo.
 
 `stats` cuenta solo ventas **pagadas** como visitas (una comanda anulada no es una
 visita). El binding `{client}` va acotado a la empresa activa, así que una ficha
@@ -194,7 +202,10 @@ El catálogo y los reportes también se editan/consultan desde el móvil:
 
 | Ruta | Permiso | Para qué |
 |---|---|---|
-| `PUT /services/{id}` | `services.edit` | Editar un servicio (precio, duración, nombre, estado) |
+| `PUT /services/{id}` | `services.edit` | Editar un servicio (precio, duración, nombre, categoría, estado) |
+| `POST /services` | `services.create` | Alta de un servicio (mismas reglas que la web: `App\Support\ServiceForm`); nace activo |
+| `GET /cash/sessions?caja_id` | `cash.view` | Historial de turnos (abiertos y cerrados) con su arqueo y `by_payment_method` (con `label`) |
+| `GET /cash/sessions/{id}` | `cash.view` | Un turno con todos sus movimientos y notas |
 | `GET /service-categories` | `services.view` | Categorías, para el editor |
 | `GET /reports/{type}` | `reports.view` (plan `estadisticas`) | Reporte en formato uniforme (resumen + **charts** + tablas). `type`: ventas, servicios, barberos, productos, clientes, ganancias |
 | `GET /personal` | `personal.view` | Barberos (activos e inactivos), para gestionarlos |
@@ -217,6 +228,39 @@ el movimiento de caja de cada venta trae ya su `detail` (qué incluyó) y
 tener `services.view`. La promesa que cubre `ApiBookingTest`: **toda hora que
 `slots` ofrece es una hora que `POST /appointments` acepta** — los dos salen de
 las mismas reglas.
+
+#### Inicio de la app (`GET /dashboard`)
+
+Requiere `dashboard.view` («Ver Inicio», se concede en el cargo). Con él la app
+abre en el Inicio; sin él, en la Agenda. Devuelve `agenda`, `sales` (hoy, ayer,
+ticket medio, propinas y `week` de 7 días), `cash` y `stock`; cada bloque exige
+además su módulo del plan y su permiso (`appointments.view`, `sales.view`,
+`cash.view`, `products.view`) y llega `null` si no se tiene. «Hoy» es el día de
+la barbería (`ShopTime::now()`), no el del servidor en UTC.
+
+#### Inventario (plan `inventario`)
+
+`GET /products` sigue siendo el catálogo para cobrar (solo lo vendible). La
+gestión completa va bajo `/inventory`, con las reglas de la web
+(`App\Support\ProductForm`, `App\Support\StockMovementForm`); el stock solo se
+mueve por `StockManager`.
+
+| Ruta | Permiso | Para qué |
+|---|---|---|
+| `GET /inventory/options` | `products.view` | Categorías, almacenes, unidades, tipos y motivos de movimiento, y el cupo del plan (`limit`) |
+| `GET /inventory/products?q&low=1&category_id&all=1` | `products.view` | Todos los productos con `stock`, `stock_label`, `low_stock`; `low_count` |
+| `GET /inventory/products/{id}` | `products.view` | Ficha: existencias por almacén, margen y últimos 20 movimientos |
+| `POST /inventory/products` | `products.create` | Alta (respeta el límite del plan → `422 plan_limit`) |
+| `PUT /inventory/products/{id}` | `products.edit` | Edición; los flags que no se mandan no se tocan |
+| `POST /inventory/movements` | `stock.create` | `type` (entrada/salida/ajuste), `product_id`, `warehouse_id`, `quantity` (en ajuste: lo contado), `reason?`, `unit_cost?`, `reference?`, `notes?` |
+
+#### Historial y anulación
+
+| Ruta | Permiso | Para qué |
+|---|---|---|
+| `GET /sales?from&to` (o `?day`) `&personal_id&status` | `sales.view` | Ventas del periodo + `summary` (`count`, `total`, `tips` sin anuladas; `cancelled`) |
+| `GET /sales/{id}` | `sales.view` | La venta completa, con `cancel_reason`, `cancelled_at` y `cancelled_by` si está anulada |
+| `PATCH /sales/{id}/cancel` | `sales.delete` | Anula (`cancel_reason?`): devuelve stock, egreso en la caja abierta, revierte comisiones pendientes. `settled_commissions` > 0 avisa de las ya liquidadas. Anular dos veces → 422 |
 
 #### Cobrar sin cobrar dos veces
 

@@ -41,6 +41,8 @@ class RolePermissionSeeder extends Seeder
                 'cajas.view', 'cajas.create', 'cajas.edit', 'cajas.delete',
                 'cash.view', 'cash.create', 'cash.edit', 'cash.delete',
                 'reports.view', 'reports.export',
+                // La app abre en el Inicio (resumen del día) solo con este permiso.
+                'dashboard.view',
                 'settings.view', 'settings.edit',
                 'subscriptions.view',
             ],
@@ -68,6 +70,7 @@ class RolePermissionSeeder extends Seeder
                 'cash.view', 'cash.create', 'cash.edit', 'cash.delete',
                 // El encargado responde por los números de su sucursal.
                 'reports.view', 'reports.export',
+                'dashboard.view',
                 // Consulta cómo está configurado, pero no lo cambia.
                 'settings.view',
             ],

@@ -42,6 +42,9 @@ class PermissionSeeder extends Seeder
             'reports' => ['label' => 'Reportes', 'article' => 'los reportes del negocio', 'actions' => ['view', 'export']],
             'agenda_blocks' => ['label' => 'Bloqueos de agenda', 'article' => 'los bloqueos de agenda (vacaciones, feriados)'],
             'settings' => ['label' => 'Configuración', 'article' => 'la configuración de la barbería', 'actions' => ['view', 'edit']],
+            // La pantalla de Inicio de la app (resumen del día). Quien no lo tiene
+            // entra directo a la Agenda.
+            'dashboard' => ['label' => 'Inicio', 'article' => 'el resumen del día (pantalla de inicio de la app)', 'actions' => ['view']],
         ];
 
         $verbs = [

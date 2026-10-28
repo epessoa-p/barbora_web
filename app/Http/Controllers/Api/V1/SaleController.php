@@ -83,30 +83,80 @@ class SaleController extends ApiController
 
     public function show(Sale $sale): JsonResponse
     {
-        $sale->load(['items.personal', 'payments', 'client', 'personal', 'branch', 'cashSession.caja']);
+        $sale->load(['items.personal', 'payments', 'client', 'personal', 'branch', 'cashSession.caja', 'canceller']);
 
         return $this->json(['data' => $this->salePayload($sale)]);
     }
 
+    /**
+     * El historial: un día (`day`) o un periodo (`from`/`to`), opcionalmente de
+     * un barbero o de un estado. El resumen cuenta todo el filtro, no solo lo
+     * devuelto, y las anuladas no suman a lo cobrado (igual que la web).
+     */
     public function index(Request $request): JsonResponse
     {
-        $sales = Sale::with(['client', 'personal'])
-            ->when($request->query('day'), fn ($q, $day) => $q->whereDate('sold_at', $day))
+        $from = $request->query('from', $request->query('day'));
+        $to = $request->query('to', $request->query('day'));
+
+        $query = Sale::query()
+            ->when($from, fn ($q, $d) => $q->whereDate('sold_at', '>=', $d))
+            ->when($to, fn ($q, $d) => $q->whereDate('sold_at', '<=', $d))
             ->when($request->integer('personal_id'), fn ($q, $id) => $q->where('personal_id', $id))
+            ->when($request->query('status'), fn ($q, $status) => $q->where('status', $status));
+
+        $sales = (clone $query)->with(['client', 'personal', 'payments'])
             ->latest('sold_at')
-            ->limit(min((int) $request->query('limit', 50), 100))
+            ->limit(min((int) $request->query('limit', 100), 200))
             ->get();
 
+        $paid = (clone $query)->paid();
+        $company = $this->company($request);
+
         return $this->json([
+            'from' => $from,
+            'to' => $to,
+            'summary' => [
+                'count' => (clone $paid)->count(),
+                'total' => (float) (clone $paid)->sum('total'),
+                'tips' => (float) (clone $paid)->sum('tip'),
+                'cancelled' => (clone $query)->where('status', 'anulada')->count(),
+            ],
             'data' => $sales->map(fn (Sale $sale) => [
                 'id' => $sale->id,
                 'number' => $sale->number,
                 'status' => $sale->status,
+                'status_label' => $sale->statusLabel(),
                 'total' => (float) $sale->total,
-                'sold_at' => ShopTime::iso($sale->sold_at, $this->company($request)),
+                'sold_at' => ShopTime::iso($sale->sold_at, $company),
                 'client' => $sale->client?->full_name,
                 'personal' => $sale->personal?->full_name,
+                'methods' => $sale->payments->map->methodLabel()->unique()->values()->all(),
             ])->all(),
+        ]);
+    }
+
+    public function cancel(Request $request, Sale $sale): JsonResponse
+    {
+        $data = $request->validate([
+            'cancel_reason' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $this->registrar->cancel($sale, $data['cancel_reason'] ?? null);
+
+        $message = "Venta {$sale->number} anulada. Se devolvió el stock y se registró el egreso en caja.";
+
+        // Las comisiones ya pagadas no se tocan: hay que regularizarlas a mano.
+        if ($left = $this->registrar->settledCommissionsLeftOver()) {
+            $message .= ' Ojo: '.($left === 1 ? '1 comisión ya estaba liquidada' : "{$left} comisiones ya estaban liquidadas")
+                .'; descuéntala del próximo pago al barbero.';
+        }
+
+        $sale->load(['items.personal', 'payments', 'client', 'personal', 'branch', 'canceller']);
+
+        return $this->json([
+            'message' => $message,
+            'settled_commissions' => $left,
+            'data' => $this->salePayload($sale),
         ]);
     }
 
@@ -122,7 +172,11 @@ class SaleController extends ApiController
             'id' => $sale->id,
             'number' => $sale->number,
             'status' => $sale->status,
+            'status_label' => $sale->statusLabel(),
             'sold_at' => ShopTime::iso($sale->sold_at, $company),
+            'cancel_reason' => $sale->cancel_reason,
+            'cancelled_at' => ShopTime::iso($sale->cancelled_at, $company),
+            'cancelled_by' => $sale->relationLoaded('canceller') ? $sale->canceller?->name : null,
             'subtotal' => (float) $sale->subtotal,
             'discount' => (float) $sale->discount,
             'tip' => (float) $sale->tip,

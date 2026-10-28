@@ -17,6 +17,8 @@ class ClientResource extends JsonResource
             'document_number' => $this->document_number,
             'preferences' => $this->preferences,
             'allergies' => $this->allergies,
+            'birth_date' => $this->birth_date?->format('Y-m-d'),
+            'notes' => $this->notes,
             'active' => (bool) $this->active,
         ];
     }

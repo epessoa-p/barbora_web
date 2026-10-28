@@ -9,6 +9,7 @@ use App\Models\Client;
 use App\Models\Personal;
 use App\Models\Service;
 use App\Support\AppointmentBooker;
+use App\Support\ClientForm;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -130,19 +131,12 @@ class BookingController extends ApiController
      */
     public function storeClient(Request $request): JsonResponse
     {
-        $data = $request->validate([
-            'full_name' => ['required', 'string', 'max:150'],
-            'phone' => ['nullable', 'string', 'max:30'],
-        ], [
-            'full_name.required' => 'Escribe el nombre del cliente.',
-        ]);
+        // El alta rápida manda solo nombre y teléfono; la ficha completa, el
+        // resto. Las reglas son las de la web (ClientForm).
+        $companyId = $request->attributes->get('tenant_company')->id;
+        $data = app(ClientForm::class)->validate($request, $companyId);
 
-        $client = Client::create([
-            'company_id' => $request->attributes->get('tenant_company')->id,
-            'full_name' => trim($data['full_name']),
-            'phone' => $data['phone'] ?? null,
-            'active' => true,
-        ]);
+        $client = Client::create($data + ['company_id' => $companyId]);
 
         return $this->json([
             'message' => 'Cliente registrado.',

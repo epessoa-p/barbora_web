@@ -15,6 +15,7 @@ class ServiceResource extends JsonResource
             'description' => $this->description,
             'duration_minutes' => (int) $this->duration_minutes,
             'price' => (float) $this->price,
+            'category_id' => $this->service_category_id,
             'category' => $this->whenLoaded('category', fn () => $this->category?->name),
             'active' => (bool) $this->active,
         ];

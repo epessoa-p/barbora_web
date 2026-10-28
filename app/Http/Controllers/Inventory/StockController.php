@@ -8,8 +8,8 @@ use App\Models\Stock;
 use App\Models\StockMovement;
 use App\Models\Warehouse;
 use App\Support\StockManager;
+use App\Support\StockMovementForm;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 
 class StockController extends Controller
 {
@@ -90,47 +90,12 @@ class StockController extends Controller
         ]);
     }
 
-    public function store(Request $request)
+    /** Las reglas son las mismas que en la API: ver StockMovementForm. */
+    public function store(Request $request, StockMovementForm $form)
     {
-        $companyId = $this->targetCompanyId();
+        $movement = $form->register($request, $this->targetCompanyId());
 
-        $data = $request->validate([
-            'type' => ['required', Rule::in(array_keys(StockMovement::TYPES))],
-            'product_id' => ['required', Rule::exists('products', 'id')->where('company_id', $companyId)],
-            'warehouse_id' => ['required', Rule::exists('warehouses', 'id')->where('company_id', $companyId)],
-            'quantity' => 'required|numeric|min:0',
-            'reason' => ['nullable', Rule::in(array_keys(StockMovement::REASONS))],
-            'unit_cost' => 'nullable|numeric|min:0',
-            'reference' => 'nullable|string|max:255',
-            'notes' => 'nullable|string',
-        ], [
-            'quantity.required' => 'Indica la cantidad.',
-        ]);
-
-        $product = Product::findOrFail($data['product_id']);
-        $warehouse = Warehouse::findOrFail($data['warehouse_id']);
-        $quantity = (float) $data['quantity'];
-
-        $attributes = [
-            'reason' => $data['reason'] ?? null,
-            'unit_cost' => $data['unit_cost'] ?? null,
-            'reference' => $data['reference'] ?? null,
-            'notes' => $data['notes'] ?? null,
-        ];
-
-        $movement = match ($data['type']) {
-            'entrada' => $this->stock->receive($product, $warehouse, $quantity, $attributes),
-            'salida' => $this->stock->issue($product, $warehouse, $quantity, $attributes),
-            'ajuste' => $this->stock->adjustTo($product, $warehouse, $quantity, $attributes),
-        };
-
-        // «Entrada registrada» pero «Ajuste registrado»: la concordancia se
-        // resuelve aquí en vez de encajar el género a la fuerza.
-        $verb = $data['type'] === 'ajuste' ? 'registrado' : 'registrada';
-
-        return redirect()->route('stock.index', ['warehouse' => $warehouse->id])
-            ->with('success', "{$movement->typeLabel()} {$verb}: «{$product->name}» queda en "
-                . $product->formatQuantity((float) $movement->quantity_after)
-                . " en «{$warehouse->name}».");
+        return redirect()->route('stock.index', ['warehouse' => $movement->warehouse_id])
+            ->with('success', $form->message($movement));
     }
 }

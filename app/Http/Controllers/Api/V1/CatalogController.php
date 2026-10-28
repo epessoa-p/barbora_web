@@ -9,10 +9,11 @@ use App\Models\Client;
 use App\Models\Product;
 use App\Models\Service;
 use App\Models\ServiceCategory;
+use App\Support\ClientForm;
+use App\Support\ServiceForm;
 use App\Support\ShopTime;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 
 /**
  * Catálogo de apoyo para la app: servicios y clientes.
@@ -51,40 +52,29 @@ class CatalogController extends ApiController
      * Mismas reglas que la web (App\Http\Controllers\Services\ServiceController).
      * El binding {service} ya está acotado a la empresa activa.
      */
-    public function updateService(Request $request, Service $service): JsonResponse
+    public function updateService(Request $request, Service $service, ServiceForm $form): JsonResponse
     {
-        $companyId = $service->company_id;
-
-        $data = $request->validate([
-            'name' => [
-                'required', 'string', 'max:255',
-                Rule::unique('services', 'name')
-                    ->where(fn ($q) => $q->where('company_id', $companyId))
-                    ->ignore($service->id),
-            ],
-            'service_category_id' => [
-                'nullable',
-                Rule::exists('service_categories', 'id')->where('company_id', $companyId),
-            ],
-            'description' => ['nullable', 'string', 'max:255'],
-            'duration_minutes' => ['required', 'integer', 'min:5', 'max:600'],
-            'price' => ['required', 'numeric', 'min:0'],
-            'active' => ['sometimes', 'boolean'],
-        ], [
-            'name.unique' => 'Ya existe un servicio con ese nombre.',
-            'duration_minutes.min' => 'La duración mínima es de 5 minutos.',
-            'duration_minutes.max' => 'La duración máxima es de 10 horas.',
-        ]);
-
-        $data['active'] = $request->boolean('active', (bool) $service->active);
-
-        $service->update($data);
+        $service->update($form->validate($request, $service->company_id, $service));
         $service->load('category');
 
         return $this->json([
             'message' => 'Servicio actualizado.',
             'data' => (new ServiceResource($service))->resolve(),
         ]);
+    }
+
+    /** Alta de un servicio desde el móvil: mismas reglas que la web. */
+    public function storeService(Request $request, ServiceForm $form): JsonResponse
+    {
+        $companyId = $request->attributes->get('tenant_company')->id;
+
+        $service = Service::create($form->validate($request, $companyId) + ['company_id' => $companyId]);
+        $service->load('category');
+
+        return $this->json([
+            'message' => "Servicio «{$service->name}» creado.",
+            'data' => (new ServiceResource($service))->resolve(),
+        ], 201);
     }
 
     /**
@@ -182,6 +172,20 @@ class CatalogController extends ApiController
                 ],
                 'recent_appointments' => AppointmentResource::collection($recent)->resolve(),
             ],
+        ]);
+    }
+
+    /**
+     * Editar la ficha desde el móvil. Mismas reglas que la web (ClientForm);
+     * `active` solo cambia si se manda.
+     */
+    public function updateClient(Request $request, Client $client): JsonResponse
+    {
+        $client->update(app(ClientForm::class)->validate($request, $client->company_id, $client));
+
+        return $this->json([
+            'message' => 'Cliente actualizado.',
+            'data' => (new ClientResource($client->refresh()))->resolve(),
         ]);
     }
 }

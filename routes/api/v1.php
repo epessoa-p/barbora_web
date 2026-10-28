@@ -1,10 +1,13 @@
 <?php
 
+use App\Http\Controllers\Api\V1\AgendaBlockController;
 use App\Http\Controllers\Api\V1\AgendaController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BookingController;
 use App\Http\Controllers\Api\V1\CashController;
 use App\Http\Controllers\Api\V1\CatalogController;
+use App\Http\Controllers\Api\V1\DashboardController;
+use App\Http\Controllers\Api\V1\InventoryController;
 use App\Http\Controllers\Api\V1\MyController;
 use App\Http\Controllers\Api\V1\PersonalController;
 use App\Http\Controllers\Api\V1\ReportController;
@@ -41,6 +44,11 @@ Route::middleware('auth:sanctum')->group(function () {
     // Empresas a las que pertenezco, para elegir el X-Company-Id.
     Route::get('/companies', [AuthController::class, 'companies'])->name('companies');
 
+    // El Inicio de la app (resumen del día). Cada bloque comprueba además su
+    // módulo y su permiso: ver Api\V1\DashboardController.
+    Route::get('/dashboard', [DashboardController::class, 'index'])
+        ->middleware('check-permission:dashboard.view')->name('dashboard');
+
     // ── Agenda (módulo de plan «agenda») ────────────────────────────────────
     Route::middleware('plan:agenda')->group(function () {
         Route::get('/agenda', [AgendaController::class, 'index'])
@@ -62,6 +70,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/services/{service}', [CatalogController::class, 'updateService'])
             ->middleware('check-permission:services.edit')->name('services.update');
 
+        Route::post('/services', [CatalogController::class, 'storeService'])
+            ->middleware('check-permission:services.create')->name('services.store');
+
         // Reservar: barberos, huecos libres y alta de la cita. Las reglas son
         // las de la web (App\Support\AppointmentBooker).
         Route::get('/staff', [BookingController::class, 'staff'])
@@ -81,6 +92,17 @@ Route::middleware('auth:sanctum')->group(function () {
         // Reprogramar: mover día, hora, barbero o servicios de una cita viva.
         Route::put('/appointments/{appointment}', [BookingController::class, 'update'])
             ->middleware('check-permission:appointments.edit')->name('appointments.update');
+
+        // Bloqueos: vacaciones, feriados, descansos. Mismas reglas que la web
+        // (App\Support\AgendaBlockForm).
+        Route::get('/agenda-blocks', [AgendaBlockController::class, 'index'])
+            ->middleware('check-permission:agenda_blocks.view')->name('agenda-blocks');
+        Route::post('/agenda-blocks', [AgendaBlockController::class, 'store'])
+            ->middleware('check-permission:agenda_blocks.create')->name('agenda-blocks.store');
+        Route::put('/agenda-blocks/{agendaBlock}', [AgendaBlockController::class, 'update'])
+            ->middleware('check-permission:agenda_blocks.edit')->name('agenda-blocks.update');
+        Route::delete('/agenda-blocks/{agendaBlock}', [AgendaBlockController::class, 'destroy'])
+            ->middleware('check-permission:agenda_blocks.delete')->name('agenda-blocks.destroy');
     });
 
     // ── Barberos (personal) ─────────────────────────────────────────────────
@@ -110,10 +132,33 @@ Route::middleware('auth:sanctum')->group(function () {
         ->middleware(['plan:clientes', 'check-permission:clients.view'])
         ->name('clients.show');
 
+    // Editar la ficha (mismas reglas que la web: App\Support\ClientForm).
+    Route::put('/clients/{client}', [CatalogController::class, 'updateClient'])
+        ->middleware(['plan:clientes', 'check-permission:clients.edit'])
+        ->name('clients.update');
+
     // ── Productos (módulo de plan «inventario») ─────────────────────────────
     Route::get('/products', [CatalogController::class, 'products'])
         ->middleware(['plan:inventario', 'check-permission:products.view'])
         ->name('products');
+
+    // ── Inventario (módulo de plan «inventario») ────────────────────────────
+    // Gestión completa: todos los productos, existencias y movimientos. Mismas
+    // reglas que la web (ProductForm, StockMovementForm).
+    Route::middleware('plan:inventario')->prefix('inventory')->name('inventory.')->group(function () {
+        Route::get('/options', [InventoryController::class, 'options'])
+            ->middleware('check-permission:products.view')->name('options');
+        Route::get('/products', [InventoryController::class, 'index'])
+            ->middleware('check-permission:products.view')->name('products');
+        Route::post('/products', [InventoryController::class, 'store'])
+            ->middleware('check-permission:products.create')->name('products.store');
+        Route::get('/products/{product}', [InventoryController::class, 'show'])
+            ->middleware('check-permission:products.view')->name('products.show');
+        Route::put('/products/{product}', [InventoryController::class, 'update'])
+            ->middleware('check-permission:products.edit')->name('products.update');
+        Route::post('/movements', [InventoryController::class, 'storeMovement'])
+            ->middleware('check-permission:stock.create')->name('movements.store');
+    });
 
     // ── Caja (módulo de plan «caja») ────────────────────────────────────────
     Route::middleware('plan:caja')->prefix('cash')->name('cash.')->group(function () {
@@ -131,6 +176,12 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::get('/movements', [CashController::class, 'movements'])
             ->middleware('check-permission:cash.view')->name('movements');
+
+        // Historial de turnos y el detalle de uno (con su arqueo).
+        Route::get('/sessions', [CashController::class, 'sessions'])
+            ->middleware('check-permission:cash.view')->name('sessions');
+        Route::get('/sessions/{session}', [CashController::class, 'showSession'])
+            ->middleware('check-permission:cash.view')->name('sessions.show');
 
         Route::post('/movements', [CashController::class, 'storeMovement'])
             ->middleware('check-permission:cash.create')->name('movements.store');
@@ -150,6 +201,11 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::get('/{sale}', [SaleController::class, 'show'])
             ->middleware('check-permission:sales.view')->name('show');
+
+        // Anular: mismo efecto que en la web (devuelve stock, egreso en caja,
+        // revierte comisiones pendientes). Ver SaleRegistrar::cancel.
+        Route::patch('/{sale}/cancel', [SaleController::class, 'cancel'])
+            ->middleware('check-permission:sales.delete')->name('cancel');
     });
 
     // ── Reportes (módulo de plan «estadisticas») ────────────────────────────

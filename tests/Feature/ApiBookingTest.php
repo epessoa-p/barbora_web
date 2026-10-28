@@ -514,6 +514,50 @@ class ApiBookingTest extends TestCase
         ]);
     }
 
+    public function test_se_crea_un_servicio_desde_el_movil(): void
+    {
+        $editor = $this->userInCompany($this->company, ['services.view', 'services.create'], 'creador_api');
+        Sanctum::actingAs($editor);
+
+        $this->postJson('/api/v1/services', [
+            'name' => 'PERFILADO DE CEJAS',
+            'duration_minutes' => 15,
+            'price' => 20,
+        ], $this->headers())
+            ->assertCreated()
+            ->assertJsonPath('data.name', 'PERFILADO DE CEJAS')
+            ->assertJsonPath('data.price', 20.0)
+            ->assertJsonPath('data.active', true);
+
+        $this->assertDatabaseHas('services', [
+            'company_id' => $this->company->id,
+            'name' => 'PERFILADO DE CEJAS',
+            'sort_order' => 0,
+        ]);
+    }
+
+    public function test_al_crear_un_servicio_se_valida_como_en_la_web(): void
+    {
+        $editor = $this->userInCompany($this->company, ['services.view', 'services.create'], 'creador_api');
+        Sanctum::actingAs($editor);
+
+        $this->postJson('/api/v1/services', [
+            'name' => 'Corte', // ya existe
+            'duration_minutes' => 2,
+            'price' => 20,
+        ], $this->headers())
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['name', 'duration_minutes']);
+    }
+
+    public function test_sin_permiso_no_se_crea_un_servicio(): void
+    {
+        Sanctum::actingAs($this->recepcion);
+
+        $this->postJson('/api/v1/services', ['name' => 'X', 'duration_minutes' => 30, 'price' => 1], $this->headers())
+            ->assertForbidden();
+    }
+
     public function test_sin_permiso_de_edicion_no_se_edita_un_servicio(): void
     {
         // Recepción no tiene services.edit.
@@ -535,6 +579,90 @@ class ApiBookingTest extends TestCase
         $this->assertDatabaseHas('clients', [
             'company_id' => $this->company->id,
             'full_name' => 'Juan Nuevo',
+            'active' => true,
         ]);
+    }
+
+    public function test_alta_de_cliente_con_la_ficha_completa(): void
+    {
+        Sanctum::actingAs($this->recepcion);
+
+        $this->postJson('/api/v1/clients', [
+            'full_name' => 'ANA PÉREZ',
+            'phone' => '71111111',
+            'email' => 'ana@demo.test',
+            'document_number' => '1234567',
+            'birth_date' => '1995-03-14',
+            'allergies' => 'Tinte con amoníaco',
+        ], $this->headers())
+            ->assertCreated()
+            ->assertJsonPath('data.birth_date', '1995-03-14')
+            ->assertJsonPath('data.allergies', 'Tinte con amoníaco');
+    }
+
+    public function test_se_edita_la_ficha_de_un_cliente(): void
+    {
+        $editor = $this->userInCompany($this->company, ['clients.view', 'clients.edit'], 'editor_clientes');
+
+        Sanctum::actingAs($editor);
+
+        $this->putJson("/api/v1/clients/{$this->client->id}", [
+            'full_name' => 'CLIENTE EDITADO',
+            'phone' => '72222222',
+            'email' => 'editado@demo.test',
+            'document_number' => '999',
+            'birth_date' => '1990-12-01',
+            'preferences' => 'Degradado bajo',
+            'allergies' => null,
+            'notes' => 'Prefiere los sábados',
+        ], $this->headers())
+            ->assertOk()
+            ->assertJsonPath('data.full_name', 'CLIENTE EDITADO')
+            ->assertJsonPath('data.notes', 'Prefiere los sábados')
+            ->assertJsonPath('data.active', true, 'Sin «active», no se desactiva.');
+
+        $this->assertSame('1990-12-01', $this->client->fresh()->birth_date->format('Y-m-d'));
+
+        $this->putJson("/api/v1/clients/{$this->client->id}", [
+            'full_name' => 'CLIENTE EDITADO',
+            'active' => false,
+        ], $this->headers())->assertOk()->assertJsonPath('data.active', false);
+    }
+
+    public function test_el_documento_no_se_repite_en_la_barberia(): void
+    {
+        $editor = $this->userInCompany($this->company, ['clients.view', 'clients.edit'], 'editor_clientes');
+
+        $this->inCompany($this->company, fn () => Client::factory()->create([
+            'company_id' => $this->company->id,
+            'document_number' => '555',
+        ]));
+
+        Sanctum::actingAs($editor);
+
+        $this->putJson("/api/v1/clients/{$this->client->id}", [
+            'full_name' => 'X',
+            'document_number' => '555',
+        ], $this->headers())->assertUnprocessable()->assertJsonValidationErrors('document_number');
+    }
+
+    public function test_sin_permiso_no_se_edita_un_cliente(): void
+    {
+        Sanctum::actingAs($this->recepcion);
+
+        $this->putJson("/api/v1/clients/{$this->client->id}", ['full_name' => 'X'], $this->headers())
+            ->assertForbidden();
+    }
+
+    public function test_no_se_edita_un_cliente_de_otra_barberia(): void
+    {
+        $otra = $this->companyWithPlan(planAttributes: ['features' => ['agenda', 'clientes']]);
+        $ajeno = $this->inCompany($otra, fn () => Client::factory()->create(['company_id' => $otra->id]));
+        $editor = $this->userInCompany($this->company, ['clients.view', 'clients.edit'], 'editor_clientes');
+
+        Sanctum::actingAs($editor);
+
+        $this->putJson("/api/v1/clients/{$ajeno->id}", ['full_name' => 'X'], $this->headers())
+            ->assertNotFound();
     }
 }
