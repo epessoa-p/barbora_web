@@ -70,6 +70,20 @@ class RoleOwnershipTest extends TestCase
         $this->assertSame(['appointments.view'], $rol->permissions()->pluck('slug')->all());
     }
 
+    /**
+     * El nombre del cargo (y todo campo de nombre) va en mayúsculas. El script
+     * va en línea en el layout, no en lo compilado: así llega a producción sin
+     * recompilar. Si deja de estar, los nombres vuelven a aceptar minúsculas.
+     */
+    public function test_el_formulario_de_cargo_lleva_el_script_de_mayusculas(): void
+    {
+        $this->actingInCompany($this->adminA, $this->barberiaA)
+            ->get(route('cargos.create'))
+            ->assertOk()
+            ->assertSee('input[name="name"], input[name="full_name"]', false)
+            ->assertSee('toLocaleUpperCase', false);
+    }
+
     public function test_el_formulario_de_cargo_no_deja_elegir_rol(): void
     {
         $response = $this->actingInCompany($this->adminA, $this->barberiaA)
