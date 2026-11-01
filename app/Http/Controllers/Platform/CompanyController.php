@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreCompanyRequest;
 use App\Models\Company;
 use App\Models\Plan;
+use App\Support\CompanySetup;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 
@@ -34,7 +35,13 @@ class CompanyController extends Controller
             'plan_id' => 'nullable|exists:plans,id',
         ])['plan_id'] ?? null;
 
-        $company = DB::transaction(function () use ($request, $planId) {
+        // «Dejar lista para usar»: sucursal, cargos, responsable con su
+        // usuario, caja y horario, en el mismo alta. Ver App\Support\CompanySetup.
+        $setup = $request->boolean('setup') ? app(CompanySetup::class) : null;
+        $setupData = $setup ? $request->validate($setup->rules(), $setup->messages()) : [];
+        $credentials = null;
+
+        $company = DB::transaction(function () use ($request, $planId, $setup, $setupData, &$credentials) {
             // El archivo no se mass-assignea: el logo se guarda aparte, ya con id.
             $company = Company::create(Arr::except($request->validated(), ['logo', 'remove_logo']));
             $this->syncCompanyLogo($request, $company);
@@ -51,11 +58,20 @@ class CompanyController extends Controller
                 ]);
             }
 
+            if ($setup) {
+                $credentials = $setup->run($company, $setupData, $request);
+            }
+
             return $company;
         });
 
+        // Las credenciales se enseñan una sola vez, en la ficha de la empresa
+        // (flash: al recargar ya no están; la contraseña no se guarda en claro).
         return redirect()->route('companies.show', $company)
-            ->with('success', 'Empresa creada exitosamente');
+            ->with('success', $credentials
+                ? 'Empresa creada y lista para usar.'
+                : 'Empresa creada exitosamente')
+            ->with('credentials', $credentials);
     }
 
     public function show(Company $company)

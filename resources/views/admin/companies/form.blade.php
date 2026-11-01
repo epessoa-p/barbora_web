@@ -143,6 +143,10 @@
                     </div>
                 </div>
 
+                @unless($company)
+                    @include('admin.companies.partials.setup')
+                @endunless
+
                 <div class="col-12 d-flex gap-2">
                     <button type="submit" class="btn btn-primary">
                         <i class="bi bi-check-circle"></i> {{ $company ? 'Actualizar' : 'Crear Empresa' }}

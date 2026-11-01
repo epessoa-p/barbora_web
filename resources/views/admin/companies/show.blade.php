@@ -3,6 +3,84 @@
 @section('page')
 <h1><i class="bi bi-building"></i> {{ $company->name }}</h1>
 
+{{-- Recién creada con «Dejar lista para usar»: las credenciales del
+     responsable, una sola vez (vienen en el flash; al recargar ya no están). --}}
+@if($credentials = session('credentials'))
+    @php
+        $loginUrl = route('login');
+        $credentialsText = implode("\n", [
+            $company->name,
+            'Acceso (web): '.$loginUrl,
+            'App: Barbora (Android)',
+            'Usuario: '.$credentials['username'],
+            'Correo: '.$credentials['email'],
+            'Contraseña: '.$credentials['password'],
+        ]);
+    @endphp
+    <div class="card border-success mt-4" id="company-credentials">
+        <div class="card-header bg-success-subtle d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="bi bi-key"></i> Credenciales del responsable</h5>
+            <button type="button" class="btn btn-success btn-sm" data-copy="{{ $credentialsText }}">
+                <i class="bi bi-clipboard"></i> Copiar todo
+            </button>
+        </div>
+        <div class="card-body">
+            <p class="text-muted small mb-3">
+                <i class="bi bi-exclamation-triangle text-warning"></i>
+                Cópialas ahora: la contraseña solo se muestra esta vez. Si se pierde, se cambia desde Usuarios.
+            </p>
+            <div class="row g-2">
+                @foreach([
+                    'Acceso (web)' => $loginUrl,
+                    'Usuario' => $credentials['username'],
+                    'Correo' => $credentials['email'],
+                    'Contraseña' => $credentials['password'],
+                ] as $label => $value)
+                    <div class="col-md-6">
+                        <label class="form-label small text-muted mb-1">{{ $label }}</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control font-monospace" value="{{ $value }}" readonly data-no-upper>
+                            <button type="button" class="btn btn-outline-secondary" data-copy="{{ $value }}" title="Copiar">
+                                <i class="bi bi-clipboard"></i>
+                            </button>
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+            <hr>
+            <p class="small mb-0">
+                <strong>Quedó creado:</strong>
+                sucursal <strong>{{ $credentials['branch'] }}</strong> (con su almacén),
+                responsable <strong>{{ $credentials['owner'] }}</strong> con cargo ADMINISTRADOR,
+                caja <strong>{{ $credentials['caja'] }}</strong> y los métodos de pago.
+            </p>
+        </div>
+    </div>
+
+    @push('scripts')
+    <script>
+        document.querySelectorAll('#company-credentials [data-copy]').forEach((button) => {
+            button.addEventListener('click', async () => {
+                const text = button.dataset.copy;
+                try {
+                    await navigator.clipboard.writeText(text);
+                } catch {
+                    // Sin HTTPS el portapapeles moderno no está: se cae al método clásico.
+                    const area = Object.assign(document.createElement('textarea'), { value: text });
+                    document.body.appendChild(area);
+                    area.select();
+                    document.execCommand('copy');
+                    area.remove();
+                }
+                const original = button.innerHTML;
+                button.innerHTML = '<i class="bi bi-check2"></i> Copiado';
+                setTimeout(() => { button.innerHTML = original; }, 1500);
+            });
+        });
+    </script>
+    @endpush
+@endif
+
 <div class="row mt-4">
     <div class="col-md-6">
         <div class="card mb-4">
