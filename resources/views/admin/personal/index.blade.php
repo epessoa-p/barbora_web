@@ -23,7 +23,7 @@
                             <th class="ps-3">Nombre</th>
                             <th>Cargo</th>
                             <th>Usuario</th>
-                            <th>Empresa</th>
+                            <th>Sucursal</th>
                             <th class="text-center">Estado</th>
                             <th class="text-end pe-3">Acciones</th>
                         </tr>
@@ -58,7 +58,10 @@
                                     <div class="fw-semibold">{{ $personal->user?->name ?? '-' }}</div>
                                     <small class="text-muted">{{ $personal->user?->email ?? '-' }}</small>
                                 </td>
-                                <td>{{ $personal->company?->name ?? '-' }}</td>
+                                <td>
+                                    {{ $personal->branch?->name ?? '—' }}
+                                    @if(auth()->user()->is_super_admin)<small class="text-muted d-block">{{ $personal->company?->name }}</small>@endif
+                                </td>
                                 <td class="text-center">
                                     <span class="badge {{ $personal->active ? 'bg-success' : 'bg-secondary' }}">{{ $personal->active ? 'Activo' : 'Inactivo' }}</span>
                                 </td>

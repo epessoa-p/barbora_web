@@ -21,6 +21,7 @@ class Personal extends Model
 
     protected $fillable = [
         'company_id',
+        'branch_id',
         'cargo_id',
         'user_id',
         'full_name',
@@ -43,6 +44,22 @@ class Personal extends Model
         'active' => 'boolean',
         'deleted_at' => 'datetime',
     ];
+
+    /** Sin sucursal base indicada, la primera de la empresa. */
+    protected static function booted(): void
+    {
+        static::creating(function (Personal $personal) {
+            if (! $personal->branch_id && $personal->company_id) {
+                $personal->branch_id = Branch::defaultIdFor((int) $personal->company_id);
+            }
+        });
+    }
+
+    /** Sucursal base: ahí atiende, cobra y se le numeran citas y ventas. */
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class);
+    }
 
     public function cargo(): BelongsTo
     {

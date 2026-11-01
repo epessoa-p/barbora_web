@@ -87,7 +87,10 @@
                 <tbody>
                     @forelse($appointments as $appointment)
                         <tr class="{{ $appointment->isReleased() ? 'opacity-50' : '' }}">
-                            <td class="ps-3 text-nowrap fw-semibold">{{ $appointment->rangeLabel() }}</td>
+                            <td class="ps-3 text-nowrap">
+                                <span class="fw-semibold d-block">{{ $appointment->rangeLabel() }}</span>
+                                @if($appointment->number)<small class="text-muted font-monospace">{{ $appointment->number }}</small>@endif
+                            </td>
                             <td>
                                 <a href="{{ route('clients.show', $appointment->client) }}" class="text-decoration-none">
                                     {{ $appointment->client?->full_name }}

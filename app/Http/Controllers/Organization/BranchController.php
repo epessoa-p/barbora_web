@@ -7,6 +7,7 @@ use App\Models\Branch;
 use App\Models\Company;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class BranchController extends Controller
 {
@@ -43,7 +44,7 @@ class BranchController extends Controller
 
             if ($this->planLimitReached($companyId, 'branches')) {
                 return back()->withInput()->withErrors([
-                    'error' => 'Alcanzaste el lÃ­mite de sucursales de tu plan. '
+                    'error' => 'Alcanzaste el límite de sucursales de tu plan. '
                              . 'Contacta a tu proveedor para ampliarlo.',
                 ]);
             }
@@ -51,7 +52,7 @@ class BranchController extends Controller
             $validated = request()->validate([
                 'company_id' => ['nullable', 'exists:companies,id'],
                 'name' => 'required|string|max:255',
-                'code' => ['nullable', 'string', 'max:50', Rule::unique('branches', 'code')],
+                'code' => ['nullable', 'string', 'max:50', $this->uniqueCode($companyId)],
                 'phone' => 'nullable|string|max:20',
                 'email' => 'nullable|email|max:255',
                 'address' => 'nullable|string|max:255',
@@ -75,6 +76,8 @@ class BranchController extends Controller
             ]);
 
             return redirect()->route('branches.index')->with('success', 'Sucursal creada exitosamente.');
+        } catch (ValidationException $exception) {
+            throw $exception;
         } catch (\Throwable $exception) {
             Log::error('Error al crear sucursal', ['message' => $exception->getMessage()]);
             return back()->withInput()->withErrors(['error' => 'No fue posible crear la sucursal.']);
@@ -110,7 +113,7 @@ class BranchController extends Controller
             $validated = request()->validate([
                 'company_id' => ['nullable', 'exists:companies,id'],
                 'name' => 'required|string|max:255',
-                'code' => ['nullable', 'string', 'max:50', Rule::unique('branches', 'code')->ignore($branch->id)],
+                'code' => ['nullable', 'string', 'max:50', $this->uniqueCode($companyId, $branch)],
                 'phone' => 'nullable|string|max:20',
                 'email' => 'nullable|email|max:255',
                 'address' => 'nullable|string|max:255',
@@ -124,11 +127,15 @@ class BranchController extends Controller
 
             $branch->update([
                 ...$validated,
+                // Vacío no borra el código: identifica la sucursal en todas partes.
+                'code' => $validated['code'] ?? null ?: $branch->code,
                 'company_id' => $companyId,
                 'active' => request()->boolean('active', false),
             ]);
 
             return redirect()->route('branches.index')->with('success', 'Sucursal actualizada exitosamente.');
+        } catch (ValidationException $exception) {
+            throw $exception;
         } catch (\Throwable $exception) {
             Log::error('Error al actualizar sucursal', ['branch_id' => $branch->id, 'message' => $exception->getMessage()]);
             return back()->withInput()->withErrors(['error' => 'No fue posible actualizar la sucursal.']);
@@ -146,6 +153,17 @@ class BranchController extends Controller
             Log::error('Error al eliminar sucursal', ['branch_id' => $branch->id, 'message' => $exception->getMessage()]);
             return back()->withErrors(['error' => 'No fue posible eliminar la sucursal.']);
         }
+    }
+
+    /**
+     * El código se repite entre empresas sin problema (todas tienen su S01);
+     * dentro de una empresa, no. Vacío = lo genera el sistema (BranchObserver).
+     */
+    protected function uniqueCode(?int $companyId, ?Branch $branch = null)
+    {
+        return Rule::unique('branches', 'code')
+            ->where('company_id', $companyId)
+            ->ignore($branch?->id);
     }
 
     protected function authorizeBranch(Branch $branch): void

@@ -63,6 +63,18 @@ class AppointmentBooker
             ]);
         }
 
+        // La cita es de la sucursal base del barbero: ahí se numera (C-000001…)
+        // y ahí se cobra. Pedirla en otra sucursal es un error de recepción.
+        if ($barber->branch_id) {
+            if (! empty($data['branch_id']) && (int) $data['branch_id'] !== (int) $barber->branch_id) {
+                throw ValidationException::withMessages([
+                    'branch_id' => "{$barber->full_name} atiende en la sucursal {$barber->branch?->name}.",
+                ]);
+            }
+
+            $data['branch_id'] = (int) $barber->branch_id;
+        }
+
         // La duración y el precio se congelan aquí: si mañana cambia la tarifa,
         // esta cita conserva lo pactado.
         $services = Service::whereIn('id', $data['services'])->get();

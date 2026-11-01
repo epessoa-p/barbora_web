@@ -76,7 +76,10 @@
                 <tbody>
                     @forelse($movements as $movement)
                         <tr>
-                            <td class="ps-3 text-nowrap">{{ $movement->created_at->format('d/m/Y H:i') }}</td>
+                            <td class="ps-3 text-nowrap">
+                                {{ $movement->created_at->format('d/m/Y H:i') }}
+                                @if($movement->number)<small class="text-muted font-monospace d-block">{{ $movement->number }}</small>@endif
+                            </td>
                             <td>
                                 <a href="{{ route('products.show', $movement->product_id) }}" class="text-decoration-none">
                                     {{ $movement->product?->name }}

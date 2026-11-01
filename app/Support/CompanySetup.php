@@ -148,6 +148,7 @@ class CompanySetup
 
         $owner = Personal::withoutGlobalScope(CompanyScope::class)->create([
             'company_id' => $company->id,
+            'branch_id' => $branch->id,
             'cargo_id' => $admin->id,
             'user_id' => $user->id,
             'full_name' => mb_strtoupper(trim($data['setup_owner_name'])),

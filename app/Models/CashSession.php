@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToCompany;
+use App\Models\Concerns\HasBranchNumber;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -15,10 +16,13 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class CashSession extends Model
 {
-    use HasFactory, BelongsToCompany;
+    use HasFactory, BelongsToCompany, HasBranchNumber;
+
+    /** Correlativo de sucursal: T-000001… (HasBranchNumber). */
+    public const NUMBER_TYPE = 'T';
 
     protected $fillable = [
-        'company_id', 'caja_id', 'status',
+        'company_id', 'caja_id', 'branch_id', 'number', 'status',
         'opened_at', 'opened_by', 'opening_amount', 'opening_notes',
         'closed_at', 'closed_by', 'closing_amount', 'expected_amount', 'difference', 'closing_notes',
     ];
@@ -37,6 +41,18 @@ class CashSession extends Model
     public function caja(): BelongsTo
     {
         return $this->belongsTo(Caja::class);
+    }
+
+    /** La de su caja, copiada al abrir para numerar y filtrar sin unir tablas. */
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class);
+    }
+
+    /** El turno es de la sucursal de su caja. */
+    protected function resolveNumberBranch(): void
+    {
+        $this->branch_id ??= Caja::withoutGlobalScopes()->whereKey($this->caja_id)->value('branch_id');
     }
 
     public function movements(): HasMany

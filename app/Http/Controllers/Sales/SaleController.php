@@ -29,7 +29,7 @@ class SaleController extends Controller
 
     public function index(Request $request)
     {
-        $query = Sale::with(['client', 'personal', 'payments'])->latest('sold_at');
+        $query = Sale::with(['branch', 'client', 'personal', 'payments'])->latest('sold_at');
 
         if ($from = $request->query('from')) {
             $query->whereDate('sold_at', '>=', $from);
@@ -37,6 +37,10 @@ class SaleController extends Controller
 
         if ($to = $request->query('to')) {
             $query->whereDate('sold_at', '<=', $to);
+        }
+
+        if ($branchId = $request->integer('branch')) {
+            $query->where('branch_id', $branchId);
         }
 
         if ($personalId = $request->integer('personal')) {
@@ -55,6 +59,7 @@ class SaleController extends Controller
 
         return view('sales.index', [
             'sales' => $sales,
+            'branches' => Branch::where('active', true)->orderBy('name')->get(),
             'staff' => Personal::bookable()->orderBy('full_name')->get(),
             'summary' => [
                 'count' => $totals->count(),

@@ -46,7 +46,7 @@ class CompanyController extends Controller
             $company = Company::create(Arr::except($request->validated(), ['logo', 'remove_logo']));
             $this->syncCompanyLogo($request, $company);
 
-            // Una empresa sin suscripciÃ³n queda bloqueada al entrar, asÃ­ que
+            // Una empresa sin suscripción queda bloqueada al entrar, así que
             // se le asigna su periodo de prueba en el mismo acto de alta.
             if ($planId && $plan = Plan::find($planId)) {
                 $company->subscription()->create([

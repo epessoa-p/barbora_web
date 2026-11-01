@@ -7,6 +7,7 @@
     <div>
         <h1 class="h4 fw-bold mb-1">
             {{ $appointment->client?->full_name }}
+            @if($appointment->number)<span class="text-muted fw-normal font-monospace small">{{ $appointment->number }}</span>@endif
             <span class="badge bg-{{ $appointment->statusColor() }} align-middle ms-1">
                 {{ $appointment->statusLabel() }}
             </span>

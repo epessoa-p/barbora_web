@@ -43,7 +43,19 @@
     <div class="col-md-2">
         <input type="date" name="to" class="form-control" value="{{ request('to') }}" title="Hasta">
     </div>
-    <div class="col-md-3">
+    @if($branches->count() > 1)
+        <div class="col-md-2">
+            <select name="branch" class="form-select">
+                <option value="">Todas las sucursales</option>
+                @foreach($branches as $branch)
+                    <option value="{{ $branch->id }}" {{ (string) request('branch') === (string) $branch->id ? 'selected' : '' }}>
+                        {{ $branch->name }}
+                    </option>
+                @endforeach
+            </select>
+        </div>
+    @endif
+    <div class="col-md-{{ $branches->count() > 1 ? 2 : 3 }}">
         <select name="personal" class="form-select">
             <option value="">Todos los barberos</option>
             @foreach($staff as $person)
@@ -53,7 +65,7 @@
             @endforeach
         </select>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-{{ $branches->count() > 1 ? 2 : 3 }}">
         <select name="status" class="form-select">
             <option value="">Todos los estados</option>
             @foreach(\App\Models\Sale::STATUSES as $value => $label)
@@ -63,7 +75,7 @@
     </div>
     <div class="col-md-2 d-flex gap-2">
         <button class="btn btn-outline-secondary flex-fill"><i class="bi bi-funnel"></i></button>
-        @if(request()->hasAny(['from', 'to', 'personal', 'status']))
+        @if(request()->hasAny(['from', 'to', 'branch', 'personal', 'status']))
             <a href="{{ route('sales.index') }}" class="btn btn-light border">Limpiar</a>
         @endif
     </div>
@@ -88,7 +100,13 @@
                 <tbody>
                     @forelse($sales as $sale)
                         <tr class="{{ $sale->isCancelled() ? 'opacity-50' : '' }}">
-                            <td class="ps-3"><code>{{ $sale->number }}</code></td>
+                            <td class="ps-3">
+                                <code>{{ $sale->number }}</code>
+                                {{-- El número se repite entre sucursales: la sucursal lo completa. --}}
+                                @if($branches->count() > 1 && $sale->branch)
+                                    <small class="text-muted d-block">{{ $sale->branch->name }}</small>
+                                @endif
+                            </td>
                             <td class="text-nowrap">{{ $sale->sold_at->format('d/m/Y H:i') }}</td>
                             <td>{{ $sale->client?->full_name ?? 'Mostrador' }}</td>
                             <td>{{ $sale->personal?->full_name ?? '—' }}</td>
@@ -117,7 +135,7 @@
                     @empty
                         <tr>
                             <td colspan="8" class="text-center py-5 text-muted">
-                                @if(request()->hasAny(['from', 'to', 'personal', 'status']))
+                                @if(request()->hasAny(['from', 'to', 'branch', 'personal', 'status']))
                                     Ninguna venta coincide con el filtro.
                                 @else
                                     Todavía no hay ventas registradas.

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToCompany;
+use App\Models\Concerns\HasBranchNumber;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -13,7 +14,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class StockMovement extends Model
 {
-    use HasFactory, BelongsToCompany;
+    use HasFactory, BelongsToCompany, HasBranchNumber;
 
     public const TYPES = [
         'entrada' => 'Entrada',
@@ -33,8 +34,11 @@ class StockMovement extends Model
         'otro' => 'Otro',
     ];
 
+    /** Correlativo de sucursal: I-000001… (HasBranchNumber). */
+    public const NUMBER_TYPE = 'I';
+
     protected $fillable = [
-        'company_id', 'warehouse_id', 'product_id', 'type',
+        'company_id', 'warehouse_id', 'branch_id', 'number', 'product_id', 'type',
         'quantity', 'quantity_after', 'reason', 'unit_cost',
         'reference', 'notes', 'created_by',
     ];
@@ -58,6 +62,21 @@ class StockMovement extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /** La de su almacén; NULL si es un almacén central. */
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class);
+    }
+
+    /**
+     * Siempre la del almacén: el movimiento numera en la sucursal donde está
+     * la mercancía. Un almacén central numera aparte (sin sucursal).
+     */
+    protected function resolveNumberBranch(): void
+    {
+        $this->branch_id = Warehouse::withoutGlobalScopes()->whereKey($this->warehouse_id)->value('branch_id');
     }
 
     public function isIncoming(): bool

@@ -7,6 +7,7 @@
     <div>
         <h1 class="h4 fw-bold mb-1">
             {{ $session->caja?->name }}
+            @if($session->number)<span class="text-muted fw-normal font-monospace small">{{ $session->number }}</span>@endif
             @if($session->isOpen())
                 <span class="badge bg-warning align-middle">Abierta</span>
             @else

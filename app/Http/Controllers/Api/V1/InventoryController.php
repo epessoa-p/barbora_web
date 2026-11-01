@@ -86,6 +86,7 @@ class InventoryController extends ApiController
                 ])->values()->all(),
                 'movements' => $movements->map(fn (StockMovement $m) => [
                     'id' => $m->id,
+                    'number' => $m->number,
                     'type' => $m->type,
                     'type_label' => $m->typeLabel(),
                     'reason_label' => $m->reasonLabel(),

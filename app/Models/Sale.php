@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToCompany;
+use App\Models\Concerns\HasBranchNumber;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -12,12 +13,15 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Sale extends Model
 {
-    use HasFactory, BelongsToCompany;
+    use HasFactory, BelongsToCompany, HasBranchNumber;
 
     public const STATUSES = [
         'pagada' => 'Pagada',
         'anulada' => 'Anulada',
     ];
+
+    /** Correlativo de sucursal: V-000001… (HasBranchNumber). */
+    public const NUMBER_TYPE = 'V';
 
     protected $fillable = [
         'company_id', 'branch_id', 'client_id', 'appointment_id', 'personal_id',
@@ -138,21 +142,14 @@ class Sale extends Model
     }
 
     /**
-     * Siguiente número libre de la empresa: V-000001, V-000002…
-     *
-     * Usa allCompanies() a propósito: al vender desde el Modo Global del
-     * superadmin no hay empresa activa y el scope dejaría el contador en cero,
-     * repitiendo números.
+     * Sin sucursal indicada, la de su turno de caja, su cita o su barbero; si
+     * no, la primera de la empresa. SaleRegistrar ya la suele traer resuelta.
      */
-    public static function nextNumberFor(int $companyId): string
+    protected function resolveNumberBranch(): void
     {
-        $last = static::allCompanies()
-            ->where('company_id', $companyId)
-            ->orderByDesc('id')
-            ->value('number');
-
-        $sequence = $last ? ((int) substr($last, 2)) + 1 : 1;
-
-        return 'V-'.str_pad((string) $sequence, 6, '0', STR_PAD_LEFT);
+        $this->branch_id ??= CashSession::withoutGlobalScopes()->whereKey($this->cash_session_id)->value('branch_id')
+            ?? Appointment::withoutGlobalScopes()->whereKey($this->appointment_id)->value('branch_id')
+            ?? Personal::withoutGlobalScopes()->whereKey($this->personal_id)->value('branch_id')
+            ?? Branch::defaultIdFor((int) $this->company_id);
     }
 }

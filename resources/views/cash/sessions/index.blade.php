@@ -60,7 +60,7 @@
                         <tr>
                             <td class="ps-3">
                                 <span class="fw-semibold d-block">{{ $session->opened_at->translatedFormat('d/m/Y H:i') }}</span>
-                                <small class="text-muted">{{ $session->openedBy?->name ?? '—' }}</small>
+                                <small class="text-muted">@if($session->number)<span class="font-monospace">{{ $session->number }}</span> · @endif{{ $session->openedBy?->name ?? '—' }}</small>
                             </td>
                             <td>{{ $session->caja?->name }}</td>
                             <td>{{ $session->durationLabel() }}</td>

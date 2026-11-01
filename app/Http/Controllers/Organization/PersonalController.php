@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Organization;
 
 use App\Http\Controllers\Controller;
+use App\Models\Branch;
 use App\Models\Cargo;
 use App\Models\Company;
 use App\Models\Personal;
@@ -20,7 +21,7 @@ class PersonalController extends Controller
     public function index()
     {
         // El CompanyScope ya filtra por la empresa activa.
-        $query = Personal::with(['cargo.role', 'company', 'user'])->latest();
+        $query = Personal::with(['branch', 'cargo.role', 'company', 'user'])->latest();
 
         if (auth()->user()->is_super_admin && request('company_id')) {
             $query->forCompany((int) request('company_id'));
@@ -44,6 +45,7 @@ class PersonalController extends Controller
 
         return view('admin.personal.create', [
             'cargos' => $cargos,
+            'branches' => $this->branchesOf($companyId),
             'companies' => $authUser->is_super_admin
                 ? Company::orderBy('name')->get()
                 : collect([$authUser->getCurrentCompany()])->filter(),
@@ -64,6 +66,7 @@ class PersonalController extends Controller
             $validated = $request->validate([
                 'company_id' => ['nullable', 'exists:companies,id'],
                 'cargo_id' => ['required', 'exists:cargos,id'],
+                'branch_id' => $this->branchRule($companyId),
                 'full_name' => ['required', 'string', 'max:255'],
                 'id_number' => ['nullable', 'string', 'max:50'],
                 'phone' => ['nullable', 'string', 'max:30'],
@@ -108,6 +111,7 @@ class PersonalController extends Controller
                 Personal::create([
                     'company_id' => $companyId,
                     'cargo_id' => $cargo->id,
+                    'branch_id' => $validated['branch_id'] ?? null,
                     'user_id' => $userId,
                     'full_name' => trim($validated['full_name']),
                     'id_number' => $validated['id_number'] ?? null,
@@ -154,6 +158,7 @@ class PersonalController extends Controller
         return view('admin.personal.edit', [
             'personal' => $personal,
             'cargos' => $cargos,
+            'branches' => $this->branchesOf($companyId),
             'companies' => $authUser->is_super_admin
                 ? Company::orderBy('name')->get()
                 : collect([$authUser->getCurrentCompany()])->filter(),
@@ -177,6 +182,7 @@ class PersonalController extends Controller
             $validated = $request->validate([
                 'company_id' => ['nullable', 'exists:companies,id'],
                 'cargo_id' => ['required', 'exists:cargos,id'],
+                'branch_id' => $this->branchRule($companyId),
                 'full_name' => ['required', 'string', 'max:255'],
                 'id_number' => ['nullable', 'string', 'max:50'],
                 'phone' => ['nullable', 'string', 'max:30'],
@@ -227,6 +233,7 @@ class PersonalController extends Controller
                 $personal->update([
                     'company_id' => $companyId,
                     'cargo_id' => $cargo->id,
+                    'branch_id' => $validated['branch_id'] ?? null,
                     'user_id' => $user?->id,
                     'full_name' => trim($validated['full_name']),
                     'id_number' => $validated['id_number'] ?? null,
@@ -274,6 +281,28 @@ class PersonalController extends Controller
         if (!$authUser->is_super_admin && $personal->company_id !== $authUser->getCurrentCompany()?->id) {
             abort(403);
         }
+    }
+
+    /** Sucursales activas de la empresa, para elegir la sucursal base. */
+    protected function branchesOf(?int $companyId)
+    {
+        return $companyId
+            ? Branch::forCompany($companyId)->where('active', true)->orderBy('name')->get()
+            : collect();
+    }
+
+    /**
+     * La sucursal base es obligatoria en cuanto la empresa tiene alguna: ahí
+     * se numeran sus citas y ventas y ahí está su caja.
+     */
+    protected function branchRule(?int $companyId): array
+    {
+        $hasBranches = $companyId && Branch::forCompany($companyId)->exists();
+
+        return [
+            $hasBranches ? 'required' : 'nullable',
+            Rule::exists('branches', 'id')->where('company_id', $companyId)->whereNull('deleted_at'),
+        ];
     }
 
     /** Campos de la ficha de barbero, compartidos por alta y edición. */

@@ -43,4 +43,48 @@ class Branch extends Model
     {
         return $this->hasOne(Warehouse::class);
     }
+
+    /** Personal cuya sucursal base es esta. */
+    public function personal(): HasMany
+    {
+        return $this->hasMany(Personal::class);
+    }
+
+    /**
+     * La sucursal por defecto de la empresa (la primera activa), para lo que
+     * llega sin sucursal. Null solo si la empresa no tiene ninguna.
+     */
+    public static function defaultIdFor(int $companyId): ?int
+    {
+        return static::allCompanies()
+            ->where('company_id', $companyId)
+            ->orderByDesc('active')
+            ->orderBy('id')
+            ->value('id');
+    }
+
+    /**
+     * Siguiente código libre de la empresa: S01, S02…
+     *
+     * Con allCompanies() y borradas incluidas, igual que Warehouse::nextCodeFor:
+     * desde el Modo Global no hay empresa activa y un código no se reutiliza.
+     */
+    public static function nextCodeFor(int $companyId): string
+    {
+        $used = static::allCompanies()
+            ->withTrashed()
+            ->where('company_id', $companyId)
+            ->pluck('code')
+            ->filter()
+            ->all();
+
+        $sequence = count($used) + 1;
+
+        do {
+            $code = 'S'.str_pad((string) $sequence, 2, '0', STR_PAD_LEFT);
+            $sequence++;
+        } while (in_array($code, $used, true));
+
+        return $code;
+    }
 }

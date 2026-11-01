@@ -302,6 +302,35 @@ como efectivo.
 Toda barbería nace con los cuatro de siempre vía `CompanyObserver`, igual que
 cada sucursal nace con su almacén. La app móvil los recibe en `GET /me`.
 
+### Sucursales y numeración
+
+Todo cuelga de una sucursal: el **personal** tiene sucursal base
+(`personal.branch_id`), cada **caja** es de una sucursal, la **cita** es de la
+sucursal del barbero, el **turno** de la de su caja y el **movimiento de
+inventario** de la de su almacén (NULL si es un almacén central). La venta toma
+la sucursal indicada, la de su cita o la del barbero, y **solo cobra en un turno
+abierto de esa sucursal**: cobrar en la caja de otra descuadraría su arqueo.
+
+Los documentos llevan un código correlativo **por sucursal**, que empieza en 1
+en cada una: `V-000001` venta, `C-000001` cita, `T-000001` turno de caja,
+`I-000001` movimiento de inventario. Como el número se repite entre sucursales,
+una venta se identifica por **sucursal + número** (índice único
+`company_id, branch_id, number`). Las liquidaciones (`LIQ-0001`) siguen siendo
+por empresa.
+
+El último número usado vive en `document_sequences` (empresa, sucursal, tipo) y
+se bloquea con `lockForUpdate` mientras dura la transacción de quien numera: dos
+cobros simultáneos no se llevan el mismo número. Lo asigna el trait
+`HasBranchNumber` al crear; ningún controlador escribe el número.
+
+Las sucursales reciben código automático por empresa (`S01`, `S02`…); el código
+es único dentro de la empresa, no entre empresas.
+
+Los datos anteriores se ordenaron con `App\Support\BranchNumbering` (migración
+`2026_11_01_000001`; en producción, `database/sql/2026_11_01_numeracion_por_sucursal.sql`):
+renumera por sucursal en orden de alta y corrige las referencias de caja e
+inventario que citaban el número viejo.
+
 ### Datos del comprobante
 
 Cada barbería carga su logo, dirección, teléfono, correo y el pie del ticket en

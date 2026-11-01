@@ -21,6 +21,7 @@ class AppointmentResource extends JsonResource
 
         return [
             'id' => $this->id,
+            'number' => $this->number,
             'starts_at' => ShopTime::iso($this->starts_at, $company),
             'ends_at' => ShopTime::iso($this->ends_at, $company),
             'duration_minutes' => $this->durationMinutes(),

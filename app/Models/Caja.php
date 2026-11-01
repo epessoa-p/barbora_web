@@ -30,6 +30,18 @@ class Caja extends Model
         'deleted_at' => 'datetime',
     ];
 
+    /**
+     * Toda caja es de una sucursal: sus turnos se numeran ahí. Sin indicarla,
+     * la de su responsable; si no, la primera de la empresa.
+     */
+    protected static function booted(): void
+    {
+        static::creating(function (Caja $caja) {
+            $caja->branch_id ??= Personal::withoutGlobalScopes()->whereKey($caja->personal_id)->value('branch_id')
+                ?? ($caja->company_id ? Branch::defaultIdFor((int) $caja->company_id) : null);
+        });
+    }
+
     public function branch(): BelongsTo
     {
         return $this->belongsTo(Branch::class);

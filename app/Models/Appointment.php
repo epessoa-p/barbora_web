@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToCompany;
+use App\Models\Concerns\HasBranchNumber;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -13,7 +14,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Appointment extends Model
 {
-    use HasFactory, SoftDeletes, BelongsToCompany;
+    use HasFactory, SoftDeletes, BelongsToCompany, HasBranchNumber;
 
     public const STATUSES = [
         'reservada' => 'Reservada',
@@ -26,8 +27,11 @@ class Appointment extends Model
     /** Estados que ya no ocupan hueco: el barbero vuelve a estar libre. */
     public const RELEASED_STATUSES = ['cancelada', 'no_show'];
 
+    /** Correlativo de sucursal: C-000001… (HasBranchNumber). */
+    public const NUMBER_TYPE = 'C';
+
     protected $fillable = [
-        'company_id', 'branch_id', 'personal_id', 'client_id',
+        'company_id', 'branch_id', 'number', 'personal_id', 'client_id',
         'starts_at', 'ends_at', 'status', 'notes', 'cancel_reason', 'created_by',
         'reminded_at', 'reminded_by',
     ];
@@ -59,6 +63,13 @@ class Appointment extends Model
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /** Sin sucursal indicada, la del barbero; si no, la primera de la empresa. */
+    protected function resolveNumberBranch(): void
+    {
+        $this->branch_id ??= Personal::withoutGlobalScopes()->whereKey($this->personal_id)->value('branch_id')
+            ?? Branch::defaultIdFor((int) $this->company_id);
     }
 
     public function services(): BelongsToMany

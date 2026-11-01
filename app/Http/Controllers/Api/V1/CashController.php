@@ -199,7 +199,7 @@ class CashController extends ApiController
         $sessions = CashSession::with(['caja', 'movements', 'openedBy', 'closedBy'])
             ->withCount('movements')
             ->when($request->integer('caja_id'), fn ($q, $id) => $q->where('caja_id', $id))
-            ->latest('opened_at')
+            ->latest('opened_at')->latest('id')
             ->limit(min((int) $request->query('limit', 30), 100))
             ->get();
 
@@ -241,6 +241,7 @@ class CashController extends ApiController
 
         $payload = [
             'id' => $session->id,
+            'number' => $session->number,
             'status' => $session->status,
             'is_open' => $session->isOpen(),
             'caja' => [
@@ -310,7 +311,14 @@ class CashController extends ApiController
             return [];
         }
 
-        return Sale::whereIn('number', $refs)->with('items')->get()
+        // El número es correlativo por sucursal: V-000001 existe en cada una.
+        // Se buscan solo las de la sucursal de los turnos de estos movimientos.
+        $branchIds = CashSession::whereIn('id', $movements->pluck('cash_session_id')->unique())
+            ->pluck('branch_id')->filter()->unique();
+
+        return Sale::whereIn('number', $refs)
+            ->when($branchIds->isNotEmpty(), fn ($q) => $q->whereIn('branch_id', $branchIds))
+            ->with('items')->get()
             ->mapWithKeys(fn (Sale $sale) => [
                 $sale->number => $sale->items->map(function ($item) {
                     $qty = (float) $item->quantity;

@@ -39,7 +39,7 @@ class WarehouseController extends Controller
         $warehouse = Warehouse::create($data);
 
         return redirect()->route('warehouses.index')
-            ->with('success', "AlmacÃ©n Â«{$warehouse->name}Â» creado con el cÃ³digo {$warehouse->code}.");
+            ->with('success', "Almacén «{$warehouse->name}» creado con el código {$warehouse->code}.");
     }
 
     public function show(Warehouse $warehouse)
@@ -75,7 +75,7 @@ class WarehouseController extends Controller
         $warehouse->update($data);
 
         return redirect()->route('warehouses.index')
-            ->with('success', 'AlmacÃ©n actualizado exitosamente.');
+            ->with('success', 'Almacén actualizado exitosamente.');
     }
 
     public function destroy(Warehouse $warehouse)
@@ -89,11 +89,11 @@ class WarehouseController extends Controller
         $warehouse->delete();
 
         return redirect()->route('warehouses.index')
-            ->with('success', 'AlmacÃ©n eliminado exitosamente.');
+            ->with('success', 'Almacén eliminado exitosamente.');
     }
 
     /**
-     * El cÃ³digo lo genera el sistema, asÃ­ que nunca se valida desde el formulario.
+     * El código lo genera el sistema, así que nunca se valida desde el formulario.
      */
     protected function rules(?int $companyId, ?Warehouse $warehouse = null): array
     {
@@ -121,8 +121,8 @@ class WarehouseController extends Controller
     }
 
     /**
-     * Un almacÃ©n ligado a una sucursal es un espejo de ella: se edita cambiando
-     * la sucursal, nunca desde aquÃ­.
+     * Un almacén ligado a una sucursal es un espejo de ella: se edita cambiando
+     * la sucursal, nunca desde aquí.
      */
     protected function denyIfManagedByBranch(Warehouse $warehouse)
     {
@@ -131,8 +131,8 @@ class WarehouseController extends Controller
         }
 
         return redirect()->route('warehouses.index')->withErrors([
-            'error' => "El almacÃ©n Â«{$warehouse->name}Â» pertenece a la sucursal "
-                     . "Â«{$warehouse->branch?->name}Â». Para cambiarlo, edita la sucursal.",
+            'error' => "El almacén «{$warehouse->name}» pertenece a la sucursal "
+                     . "«{$warehouse->branch?->name}». Para cambiarlo, edita la sucursal.",
         ]);
     }
 }

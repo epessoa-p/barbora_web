@@ -5,6 +5,7 @@ namespace App\Observers;
 use App\Models\Branch;
 use App\Models\Scopes\CompanyScope;
 use App\Models\Warehouse;
+use App\Support\Tenancy;
 
 /**
  * Cada sucursal tiene su almacén espejo.
@@ -14,6 +15,18 @@ use App\Models\Warehouse;
  */
 class BranchObserver
 {
+    /** Sin código propio, el siguiente libre de la empresa: S01, S02… */
+    public function creating(Branch $branch): void
+    {
+        // Este evento puede llegar antes que el de BelongsToCompany, que es
+        // quien rellena company_id: se toma de la empresa activa si falta.
+        $branch->company_id ??= app(Tenancy::class)->id();
+
+        if (blank($branch->code) && $branch->company_id) {
+            $branch->code = Branch::nextCodeFor((int) $branch->company_id);
+        }
+    }
+
     public function created(Branch $branch): void
     {
         // Sin el CompanyScope: el superadmin puede crear sucursales en Modo

@@ -10,8 +10,8 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 /**
- * SuscripciÃ³n de una empresa: plan, estado, fechas y overrides.
- * Ver ARQUITECTURA Â§7 y Â§8.
+ * Suscripción de una empresa: plan, estado, fechas y overrides.
+ * Ver ARQUITECTURA §7 y §8.
  */
 class SubscriptionController extends Controller
 {
@@ -47,7 +47,7 @@ class SubscriptionController extends Controller
             'current_period_end' => 'nullable|date',
             'grace_days' => 'required|integer|min:0|max:90',
             'notes' => 'nullable|string',
-            // VacÃ­o = heredar el lÃ­mite del plan.
+            // Vacío = heredar el límite del plan.
             'max_users_override' => 'nullable|integer|min:0',
             'max_branches_override' => 'nullable|integer|min:0',
             'max_products_override' => 'nullable|integer|min:0',
@@ -55,8 +55,8 @@ class SubscriptionController extends Controller
             'features_override.*' => [Rule::in(array_keys(Plan::MODULES))],
         ]);
 
-        // Sin marcar "personalizar mÃ³dulos", el override queda en NULL y la
-        // empresa hereda los del plan. Un array vacÃ­o significarÃ­a "ninguno".
+        // Sin marcar "personalizar módulos", el override queda en NULL y la
+        // empresa hereda los del plan. Un array vacío significaría "ninguno".
         $data['features_override'] = $request->boolean('override_features')
             ? array_values($request->input('features_override', []))
             : null;
@@ -70,6 +70,6 @@ class SubscriptionController extends Controller
         }
 
         return redirect()->route('companies.show', $company)
-            ->with('success', 'SuscripciÃ³n actualizada exitosamente.');
+            ->with('success', 'Suscripción actualizada exitosamente.');
     }
 }

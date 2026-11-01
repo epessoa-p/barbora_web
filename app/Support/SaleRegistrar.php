@@ -3,9 +3,11 @@
 namespace App\Support;
 
 use App\Models\Appointment;
+use App\Models\Branch;
 use App\Models\Caja;
 use App\Models\CashSession;
 use App\Models\Company;
+use App\Models\Personal;
 use App\Models\Product;
 use App\Models\Sale;
 use App\Models\Warehouse;
@@ -57,8 +59,12 @@ class SaleRegistrar
             ]);
         }
 
-        $session = $this->resolveCashSession($company, $data['branch_id'] ?? null);
-        $warehouse = $this->resolveWarehouse($company, $items, $data['branch_id'] ?? null);
+        // La venta es de una sucursal y cobra en una caja de esa sucursal: así
+        // su número (V-000001…) es el correlativo de esa sucursal.
+        $data['branch_id'] = $this->resolveBranch($data);
+        $session = $this->resolveCashSession($company, $data['branch_id']);
+        $data['branch_id'] ??= $session?->branch_id ?? Branch::defaultIdFor($company->id);
+        $warehouse = $this->resolveWarehouse($company, $items, $data['branch_id']);
 
         return DB::transaction(function () use ($company, $data, $items, $payments, $subtotal, $discount, $tip, $total, $session, $warehouse) {
             $sale = Sale::withoutGlobalScopes()->create([
@@ -68,7 +74,6 @@ class SaleRegistrar
                 'appointment_id' => $data['appointment_id'] ?? null,
                 'personal_id' => $data['personal_id'] ?? null,
                 'cash_session_id' => $session?->id,
-                'number' => Sale::nextNumberFor($company->id),
                 'status' => 'pagada',
                 'subtotal' => $subtotal,
                 'discount' => $discount,
@@ -230,39 +235,67 @@ class SaleRegistrar
             return null;
         }
 
-        $session = $this->openSessionFor($company->id, $branchId);
+        // Con sucursal, solo vale una caja de esa sucursal: cobrar en la de
+        // otra descuadraría su arqueo y su numeración.
+        $session = $this->openSessionFor($company->id, $branchId, strict: true);
 
         if (! $session) {
+            $branch = $branchId ? Branch::withoutGlobalScopes()->find($branchId) : null;
+
             throw ValidationException::withMessages([
-                'error' => 'No hay ningún turno de caja abierto. Abre la caja antes de cobrar.',
+                'error' => $branch
+                    ? "No hay ningún turno de caja abierto en la sucursal {$branch->name}. Abre su caja antes de cobrar."
+                    : 'No hay ningún turno de caja abierto. Abre la caja antes de cobrar.',
             ]);
         }
 
         return $session;
     }
 
-    protected function openSessionFor(int $companyId, ?int $branchId): ?CashSession
+    /**
+     * La sucursal de la venta, si se puede saber antes de buscar caja: la
+     * indicada, la de su cita o la del barbero. Si no, la decide el turno.
+     */
+    protected function resolveBranch(array $data): ?int
+    {
+        $branchId = $data['branch_id'] ?? null;
+
+        if (! $branchId && ! empty($data['appointment_id'])) {
+            $branchId = Appointment::withoutGlobalScopes()->whereKey($data['appointment_id'])->value('branch_id');
+        }
+
+        if (! $branchId && ! empty($data['personal_id'])) {
+            $branchId = Personal::withoutGlobalScopes()->whereKey($data['personal_id'])->value('branch_id');
+        }
+
+        return $branchId ? (int) $branchId : null;
+    }
+
+    /**
+     * Un turno abierto de la sucursal. Sin sucursal, el primero de la empresa.
+     * $strict = false (al anular) admite el de otra sucursal si la suya no
+     * tiene ninguno abierto: devolver el dinero no debe quedar bloqueado.
+     */
+    protected function openSessionFor(int $companyId, ?int $branchId, bool $strict = false): ?CashSession
     {
         $open = CashSession::withoutGlobalScopes()
             ->where('company_id', $companyId)
             ->where('status', 'abierta')
             ->orderBy('opened_at');
 
-        // Si la venta es de una sucursal, se prefiere la caja de esa sucursal;
-        // si esa caja no tiene turno abierto, vale cualquiera de la empresa.
-        // Sin whereHas: la relación aplicaría el scope de empresa y aquí se
-        // consulta a propósito por fuera de él.
         if ($branchId) {
+            // Sin whereHas: la relación aplicaría el scope de empresa y aquí se
+            // consulta a propósito por fuera de él.
             $cajaIds = Caja::withoutGlobalScopes()
                 ->where('company_id', $companyId)
                 ->where('branch_id', $branchId)
                 ->pluck('id');
 
-            $ofBranch = $cajaIds->isNotEmpty()
-                ? (clone $open)->whereIn('caja_id', $cajaIds)->first()
-                : null;
+            $ofBranch = (clone $open)
+                ->where(fn ($q) => $q->where('branch_id', $branchId)->orWhereIn('caja_id', $cajaIds))
+                ->first();
 
-            if ($ofBranch) {
+            if ($ofBranch || $strict) {
                 return $ofBranch;
             }
         }

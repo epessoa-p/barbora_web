@@ -43,9 +43,9 @@
                     </div>
 
                     <div class="col-md-6">
-                        <label class="form-label">Sucursal</label>
-                        <select name="branch_id" class="form-select @error('branch_id') is-invalid @enderror">
-                            <option value="">Sin sucursal asignada</option>
+                        <label class="form-label">Sucursal <span class="text-danger">*</span></label>
+                        <select name="branch_id" class="form-select @error('branch_id') is-invalid @enderror" required>
+                            @if($branches->count() !== 1)<option value="">Seleccionar sucursal</option>@endif
                             @foreach($branches as $branch)
                                 <option value="{{ $branch->id }}" {{ (string) old('branch_id', $caja?->branch_id) === (string) $branch->id ? 'selected' : '' }}>
                                     {{ $branch->name }}
@@ -61,7 +61,7 @@
                             <option value="">Sin asignar (caja general)</option>
                             @foreach($personals as $person)
                                 <option value="{{ $person->id }}" {{ (string) old('personal_id', $caja?->personal_id) === (string) $person->id ? 'selected' : '' }}>
-                                    {{ $person->full_name }}
+                                    {{ $person->full_name }}@if($person->branch) · {{ $person->branch->name }}@endif
                                 </option>
                             @endforeach
                         </select>

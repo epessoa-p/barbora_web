@@ -26,7 +26,7 @@ class PlanController extends Controller
         $plan = Plan::create($this->validated($request));
 
         return redirect()->route('plans.index')
-            ->with('success', "Plan Â«{$plan->name}Â» creado exitosamente.");
+            ->with('success', "Plan «{$plan->name}» creado exitosamente.");
     }
 
     public function edit(Plan $plan)
@@ -39,7 +39,7 @@ class PlanController extends Controller
         $plan->update($this->validated($request, $plan));
 
         return redirect()->route('plans.index')
-            ->with('success', "Plan Â«{$plan->name}Â» actualizado exitosamente.");
+            ->with('success', "Plan «{$plan->name}» actualizado exitosamente.");
     }
 
     public function destroy(Plan $plan)
@@ -47,7 +47,7 @@ class PlanController extends Controller
         if ($plan->subscriptions()->exists()) {
             return back()->withErrors([
                 'error' => 'No puedes eliminar un plan que tiene empresas suscritas. '
-                         . 'DesactÃ­valo para que deje de ofrecerse.',
+                         . 'Desactívalo para que deje de ofrecerse.',
             ]);
         }
 
@@ -65,7 +65,7 @@ class PlanController extends Controller
             'price' => 'required|numeric|min:0',
             'billing_period' => ['required', Rule::in(['monthly', 'yearly'])],
             'trial_days' => 'required|integer|min:0|max:365',
-            // VacÃ­o = ilimitado.
+            // Vacío = ilimitado.
             'max_users' => 'nullable|integer|min:0',
             'max_branches' => 'nullable|integer|min:0',
             'max_products' => 'nullable|integer|min:0',
