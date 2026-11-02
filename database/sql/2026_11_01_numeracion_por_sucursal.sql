@@ -19,7 +19,10 @@
 --
 -- Antes de ejecutarlo: subir el código (GitHub). Recomendado: copia de la base.
 
-SET NAMES utf8mb4;
+-- El mismo cotejo que las tablas de Laravel: sin esto, phpMyAdmin conecta con
+-- utf8mb4_general_ci y comparar textos generados con columnas da el error
+-- #1267 «Mezcla ilegal de cotejos».
+SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- ---------------------------------------------------------------------------
 -- 1. Estructura
@@ -189,7 +192,8 @@ WHERE m.`branch_id` IS NULL AND w.`branch_id` IS NOT NULL;
 DROP TEMPORARY TABLE IF EXISTS `tmp_sale_number`;
 CREATE TEMPORARY TABLE `tmp_sale_number` AS
 SELECT `id`, `company_id`, `number` AS `old_number`,
-       CONCAT('V-', LPAD(ROW_NUMBER() OVER (PARTITION BY `company_id`, `branch_id` ORDER BY `id`), 6, '0')) AS `new_number`
+       CONVERT(CONCAT('V-', LPAD(ROW_NUMBER() OVER (PARTITION BY `company_id`, `branch_id` ORDER BY `id`), 6, '0')) USING utf8mb4)
+         COLLATE utf8mb4_unicode_ci AS `new_number`
 FROM `sales`;
 
 DELETE FROM `tmp_sale_number` WHERE `old_number` = `new_number`;
