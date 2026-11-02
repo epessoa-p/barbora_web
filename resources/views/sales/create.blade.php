@@ -194,6 +194,12 @@
                     </div>
 
                     <h6 class="fw-bold mt-3 mb-2">Pago</h6>
+                    @if(empty(\App\Models\SalePayment::methods()))
+                        <div class="alert alert-warning small py-2">
+                            La barbería no tiene métodos de pago activos.
+                            <a href="{{ route('payment-methods.index') }}">Actívalos en Métodos de pago</a>.
+                        </div>
+                    @endif
                     <div id="payment-lines"></div>
 
                     <button type="button" class="btn btn-sm btn-light border w-100 mb-3" id="add-payment">
