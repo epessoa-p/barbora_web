@@ -171,6 +171,32 @@ class CatalogTest extends TestCase
         $this->assertSame($company->id, $client->company_id);
     }
 
+    public function test_el_alta_rapida_desde_la_cita_responde_json(): void
+    {
+        $company = $this->companyWithPlan();
+        $user = $this->userInCompany($company, ['clients.view', 'clients.create', 'appointments.create']);
+
+        $id = $this->actingInCompany($user, $company)
+            ->postJson(route('clients.store'), ['full_name' => 'Carlos Mendoza', 'phone' => '7111', 'active' => 1])
+            ->assertCreated()
+            ->assertJsonPath('data.full_name', 'Carlos Mendoza')
+            ->json('data.id');
+
+        $this->assertTrue(Client::allCompanies()->findOrFail($id)->active);
+
+        // El formulario de la cita ofrece el modal.
+        $this->actingInCompany($user, $company)
+            ->get(route('appointments.create'))
+            ->assertOk()
+            ->assertSee('new-client-modal');
+
+        // Los errores vuelven como JSON para pintarlos en el modal.
+        $this->actingInCompany($user, $company)
+            ->postJson(route('clients.store'), ['full_name' => ''])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('full_name');
+    }
+
     public function test_el_documento_no_se_repite_dentro_de_la_empresa(): void
     {
         $company = $this->companyWithPlan();

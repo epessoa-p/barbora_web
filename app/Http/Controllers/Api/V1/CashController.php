@@ -6,12 +6,13 @@ use App\Models\Caja;
 use App\Models\CashMovement;
 use App\Models\CashSession;
 use App\Models\Company;
+use App\Models\PaymentMethod;
 use App\Models\Sale;
+use App\Support\CashSessionCloser;
 use App\Support\ShopTime;
 use Illuminate\Support\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -94,7 +95,7 @@ class CashController extends ApiController
     }
 
     /** Arqueo: se cuenta el efectivo y se cierra. */
-    public function close(Request $request, CashSession $session): JsonResponse
+    public function close(Request $request, CashSession $session, CashSessionCloser $closer): JsonResponse
     {
         if (! $session->isOpen()) {
             return $this->json([
@@ -103,35 +104,13 @@ class CashController extends ApiController
             ], 422);
         }
 
-        $data = $request->validate([
-            'closing_amount' => ['required', 'numeric', 'min:0'],
-            'closing_notes' => ['nullable', 'string', 'max:2000'],
-        ], [
-            'closing_amount.required' => 'Indica cuánto efectivo contaste en el cajón.',
-        ]);
-
-        $session->load('movements');
-
-        // El esperado se guarda, no se recalcula al mirarlo después: es la foto
-        // del momento del arqueo.
-        $expected = $session->totals()['expected_cash'];
-        $counted = (float) $data['closing_amount'];
-
-        DB::transaction(function () use ($session, $data, $expected, $counted, $request) {
-            $session->update([
-                'status' => 'cerrada',
-                'closed_at' => now(),
-                'closed_by' => $request->user()->id,
-                'closing_amount' => $counted,
-                'expected_amount' => $expected,
-                'difference' => round($counted - $expected, 2),
-                'closing_notes' => $data['closing_notes'] ?? null,
-            ]);
-        });
+        // Mismo cierre que la web: solo efectivo, por total o por billetes y
+        // monedas, y deja el saldo de la caja en lo contado.
+        $session = $closer->close($request, $session, $request->attributes->get('tenant_company'));
 
         return $this->json([
-            'message' => 'Turno cerrado: '.strtolower($session->fresh()->differenceLabel()).'.',
-            'data' => $this->sessionPayload($session->fresh()->load('movements'), withMovements: true),
+            'message' => 'Turno cerrado: '.strtolower($session->differenceLabel()).'.',
+            'data' => $this->sessionPayload($session->load('movements'), withMovements: true),
         ]);
     }
 
@@ -238,6 +217,7 @@ class CashController extends ApiController
     {
         $company = request()->attributes->get('tenant_company');
         $totals = $session->totals();
+        $cashSlugs = PaymentMethod::cashSlugs();
 
         $payload = [
             'id' => $session->id,
@@ -266,6 +246,8 @@ class CashController extends ApiController
             'by_payment_method' => collect($session->byPaymentMethod())
                 ->map(fn (array $row, string $slug) => $row + [
                     'label' => CashMovement::paymentMethods()[$slug] ?? ucfirst($slug),
+                    // Solo estos entran al arqueo; el resto está en el banco.
+                    'counts_as_cash' => in_array($slug, $cashSlugs, true),
                 ])->all(),
             // withCount en el historial evita una consulta por turno.
             'movements_count' => $session->movements_count ?? $session->movements()->count(),
@@ -277,6 +259,8 @@ class CashController extends ApiController
                 'closed_at' => ShopTime::iso($session->closed_at, $company),
                 'closed_by' => $session->closedBy?->name,
                 'closing_amount' => (float) $session->closing_amount,
+                // {«200.00»: 3, «0.50»: 4}, o null si se cerró por total.
+                'closing_denominations' => $session->closing_denominations ?: null,
                 'expected_amount' => (float) $session->expected_amount,
                 'difference' => (float) $session->difference,
                 'difference_label' => $session->differenceLabel(),

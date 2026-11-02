@@ -34,6 +34,10 @@ class EnsureSubscriptionActive
         'set-company',
         'exit-company',
         'subscription.blocked',
+        // El catálogo público es de la barbería que lo publica, no de quien lo
+        // mira: un usuario logueado con su suscripción vencida también lo ve.
+        'catalog.public',
+        'catalog.poster',
         'api.login',
         'api.logout',
         'api.me',

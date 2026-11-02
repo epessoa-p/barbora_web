@@ -15,6 +15,15 @@
             'quantity' => 1,
         ])->values()
         : collect();
+
+    // Alta rápida de cliente: el módulo en el plan y el permiso.
+    $canCreateClient = (auth()->user()->is_super_admin || (bool) $tenantCompany?->planAllows('clientes'))
+        && auth()->user()->hasPermissionInCompany('clients.create', $tenantCompany);
+
+    // La pill elegida al abrir: el primer método que cuenta como efectivo.
+    $cashSlugs = \App\Models\PaymentMethod::cashSlugs();
+    $methodSlugs = array_keys(\App\Models\SalePayment::methods());
+    $defaultMethod = collect($methodSlugs)->first(fn ($s) => in_array($s, $cashSlugs, true)) ?? ($methodSlugs[0] ?? null);
 @endphp
 
 @section('page')
@@ -129,9 +138,14 @@
                                     </option>
                                 @endforeach
                             </select>
+                            @if($canCreateClient)
+                                <button type="button" class="btn btn-link btn-sm px-0" data-bs-toggle="modal" data-bs-target="#new-client-modal">
+                                    <i class="bi bi-person-plus"></i> Nuevo cliente
+                                </button>
+                            @endif
                         </div>
 
-                        <div class="col-7">
+                        <div class="{{ $branches->count() > 1 ? 'col-7' : 'col-12' }}">
                             <label for="personal_id" class="form-label">Atendió</label>
                             <select id="personal_id" name="personal_id" class="form-select">
                                 <option value="">Sin asignar</option>
@@ -144,18 +158,12 @@
                             </select>
                         </div>
 
-                        <div class="col-5">
-                            <label for="branch_id" class="form-label">Sucursal</label>
-                            <select id="branch_id" name="branch_id" class="form-select">
-                                <option value="">—</option>
-                                @foreach($branches as $branch)
-                                    <option value="{{ $branch->id }}"
-                                            {{ (string) old('branch_id', $appointment?->branch_id) === (string) $branch->id ? 'selected' : '' }}>
-                                        {{ $branch->name }}
-                                    </option>
-                                @endforeach
-                            </select>
-                        </div>
+                        {{-- La de la cita que se cobra o, si no, la del usuario. --}}
+                        @include('partials.branch-select', [
+                            'branches' => $branches,
+                            'selected' => $appointment?->branch_id ?? \App\Models\Branch::preferredIdFor(auth()->user(), $tenantCompany?->id),
+                            'wrapper' => 'col-5',
+                        ])
                     </div>
 
                     <h6 class="fw-bold mb-2">Comanda</h6>
@@ -200,13 +208,39 @@
                             <a href="{{ route('payment-methods.index') }}">Actívalos en Métodos de pago</a>.
                         </div>
                     @endif
+                    {{-- Un método: se elige con las pills y se lleva el total. Pago
+                         mixto: un importe por cada método, que tiene que cuadrar. --}}
+                    <div class="d-flex flex-wrap gap-2 mb-2" id="method-pills">
+                        @foreach(\App\Models\SalePayment::methods() as $slug => $label)
+                            <input type="radio" class="btn-check" name="method_pill" id="pill-{{ $slug }}" value="{{ $slug }}"
+                                   autocomplete="off" {{ $slug === $defaultMethod ? 'checked' : '' }}>
+                            <label class="btn btn-sm btn-outline-primary rounded-pill px-3" for="pill-{{ $slug }}">
+                                <i class="bi {{ in_array($slug, $cashSlugs, true) ? 'bi-cash' : 'bi-credit-card' }}"></i>
+                                {{ $label }}
+                            </label>
+                        @endforeach
+                    </div>
+
+                    <div class="form-check form-switch mb-2">
+                        <input class="form-check-input" type="checkbox" role="switch" id="mixed-payment">
+                        <label class="form-check-label small" for="mixed-payment">Pago mixto (varias formas de pago)</label>
+                    </div>
+
+                    <div id="mixed-lines" class="d-none mb-2">
+                        @foreach(\App\Models\SalePayment::methods() as $slug => $label)
+                            <div class="input-group input-group-sm mb-1">
+                                <span class="input-group-text" style="min-width: 8rem">{{ $label }}</span>
+                                <span class="input-group-text">{{ $symbol }}</span>
+                                <input type="number" step="0.01" min="0" class="form-control mixed-amount"
+                                       data-slug="{{ $slug }}" placeholder="0.00">
+                            </div>
+                        @endforeach
+                    </div>
+
+                    {{-- Lo que de verdad se envía: lo arma el script al cambiar algo. --}}
                     <div id="payment-lines"></div>
 
-                    <button type="button" class="btn btn-sm btn-light border w-100 mb-3" id="add-payment">
-                        <i class="bi bi-plus-lg"></i> Añadir otro método (pago mixto)
-                    </button>
-
-                    <div class="d-flex justify-content-between py-1 small" id="pending-row">
+                    <div class="d-flex justify-content-between py-1 small d-none" id="pending-row">
                         <span class="text-muted">Pendiente</span>
                         <span id="sum-pending">{{ $symbol }} 0.00</span>
                     </div>
@@ -224,6 +258,10 @@
         </div>
     </div>
 </form>
+
+@if($canCreateClient)
+    @include('clients.partials.quick-create', ['selectId' => 'client_id'])
+@endif
 @endsection
 
 @push('scripts')
@@ -298,43 +336,31 @@
     }
 
     // ── Pagos ───────────────────────────────────────────────────────────────
+    //
+    // Sin pago mixto, la pill elegida se lleva el total. Con pago mixto, cada
+    // método tiene su importe y la suma tiene que cuadrar con el total. En los
+    // dos casos se envían payments[i][payment_method] / payments[i][amount].
 
-    function addPayment(amount) {
-        const index = paymentsEl.children.length;
-        const row = document.createElement('div');
-        row.className = 'payment-line row g-2 mb-2';
+    const mixedEl = document.getElementById('mixed-payment');
+    const mixedLinesEl = document.getElementById('mixed-lines');
+    const pillsEl = document.getElementById('method-pills');
+    const mixedInputs = Array.from(document.querySelectorAll('.mixed-amount'));
+    let lastTotal = 0;
 
-        let options = '';
-        Object.entries(methods).forEach(function ([value, label]) {
-            options += '<option value="' + value + '">' + label + '</option>';
-        });
-
-        row.innerHTML =
-            '<div class="col-6">' +
-                '<select name="payments[' + index + '][payment_method]" class="form-select form-select-sm">' + options + '</select>' +
-            '</div>' +
-            '<div class="col-5">' +
-                '<input type="number" step="0.01" min="0" class="form-control form-control-sm amount" ' +
-                    'name="payments[' + index + '][amount]" value="' + (amount || 0).toFixed(2) + '">' +
-            '</div>' +
-            '<div class="col-1 d-flex align-items-center">' +
-                (index > 0 ? '<button type="button" class="btn btn-sm btn-link text-danger p-0 remove-payment"><i class="bi bi-x-lg"></i></button>' : '') +
-            '</div>';
-
-        row.querySelector('.amount').addEventListener('input', refreshTotals);
-        row.querySelector('.remove-payment')?.addEventListener('click', function () {
-            row.remove();
-            reindexPayments();
-            refreshTotals();
-        });
-
-        paymentsEl.appendChild(row);
+    function selectedMethod() {
+        return pillsEl.querySelector('input:checked')?.value || Object.keys(methods)[0];
     }
 
-    function reindexPayments() {
-        Array.from(paymentsEl.children).forEach(function (row, i) {
-            row.querySelector('select').name = 'payments[' + i + '][payment_method]';
-            row.querySelector('.amount').name = 'payments[' + i + '][amount]';
+    function writePayments(lines) {
+        paymentsEl.innerHTML = '';
+        lines.forEach(function (line, i) {
+            ['payment_method', 'amount'].forEach(function (field) {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'payments[' + i + '][' + field + ']';
+                input.value = field === 'amount' ? line.amount.toFixed(2) : line.method;
+                paymentsEl.appendChild(input);
+            });
         });
     }
 
@@ -343,12 +369,28 @@
         const discount = parseFloat(discountEl.value) || 0;
         const tip = parseFloat(tipEl.value) || 0;
         const total = subtotal - discount + tip;
+        lastTotal = total;
 
         document.getElementById('sum-subtotal').textContent = money(subtotal);
         document.getElementById('sum-total').textContent = money(total);
 
-        const paid = Array.from(paymentsEl.querySelectorAll('.amount'))
-            .reduce((sum, el) => sum + (parseFloat(el.value) || 0), 0);
+        const mixed = mixedEl.checked;
+        mixedLinesEl.classList.toggle('d-none', !mixed);
+        pillsEl.classList.toggle('d-none', mixed);
+        document.getElementById('pending-row').classList.toggle('d-none', !mixed);
+
+        if (!mixed) {
+            writePayments([{ method: selectedMethod(), amount: total }]);
+            submitEl.disabled = cart.length === 0 || total <= 0;
+            return;
+        }
+
+        const lines = mixedInputs
+            .map((el) => ({ method: el.dataset.slug, amount: parseFloat(el.value) || 0 }))
+            .filter((l) => l.amount > 0);
+        writePayments(lines);
+
+        const paid = lines.reduce((sum, l) => sum + l.amount, 0);
         const pending = total - paid;
 
         const pendingEl = document.getElementById('sum-pending');
@@ -357,15 +399,22 @@
         document.getElementById('pending-row').querySelector('.text-muted').textContent =
             pending < -0.005 ? 'Sobra' : 'Pendiente';
 
-        // Con un solo método, el importe sigue al total: es el caso habitual.
-        if (paymentsEl.children.length === 1 && document.activeElement !== paymentsEl.querySelector('.amount')) {
-            paymentsEl.querySelector('.amount').value = total.toFixed(2);
-            submitEl.disabled = cart.length === 0 || total <= 0;
-            return;
-        }
-
-        submitEl.disabled = cart.length === 0 || total <= 0 || Math.abs(pending) >= 0.01;
+        submitEl.disabled = cart.length === 0 || total <= 0 || lines.length === 0 || Math.abs(pending) >= 0.01;
     }
+
+    // Al activar el mixto se arranca con todo en el método elegido: lo normal
+    // es repartir a partir de ahí.
+    mixedEl.addEventListener('change', function () {
+        if (mixedEl.checked) {
+            const total = lastTotal;
+            mixedInputs.forEach(function (el) {
+                el.value = el.dataset.slug === selectedMethod() ? total.toFixed(2) : '';
+            });
+        }
+        refreshTotals();
+    });
+    mixedInputs.forEach((el) => el.addEventListener('input', refreshTotals));
+    pillsEl.addEventListener('change', refreshTotals);
 
     // ── Enganches ───────────────────────────────────────────────────────────
 
@@ -384,11 +433,8 @@
         });
     });
 
-    document.getElementById('add-payment').addEventListener('click', () => { addPayment(0); refreshTotals(); });
     discountEl.addEventListener('input', refreshTotals);
     tipEl.addEventListener('input', refreshTotals);
-
-    addPayment(0);
 
     @foreach($preloaded as $line)
         addLine(@json($line['type']), {{ $line['id'] }}, @json($line['name']), {{ $line['price'] }}, null);

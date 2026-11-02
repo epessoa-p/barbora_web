@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Settings;
 
 use App\Http\Controllers\Controller;
 use App\Models\Company;
+use App\Support\CashSessionCloser;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
@@ -34,6 +35,8 @@ class CompanyProfileController extends Controller
             'phone' => ['nullable', 'string', 'max:30'],
             'email' => ['nullable', 'email', 'max:255'],
             'receipt_footer' => ['nullable', 'string', 'max:255'],
+            // Cómo se cierra caja; si no llega (app vieja), no se toca.
+            'cash_count_mode' => ['sometimes', 'in:'.implode(',', array_keys(CashSessionCloser::MODES))],
             // Cuadrado o apaisado, pequeño: va en un ticket de 80 mm y en el móvil.
             'logo' => ['nullable', 'image', 'mimes:png,jpg,jpeg,webp', 'max:1024'],
             'remove_logo' => ['nullable', 'boolean'],
@@ -65,6 +68,7 @@ class CompanyProfileController extends Controller
                 'phone' => $data['phone'] ?? null,
                 'email' => $data['email'] ?? null,
                 'receipt_footer' => $data['receipt_footer'] ?? null,
+                ...(array_key_exists('cash_count_mode', $data) ? ['cash_count_mode' => $data['cash_count_mode']] : []),
                 'logo' => $logo,
             ]);
         } catch (\Throwable $e) {

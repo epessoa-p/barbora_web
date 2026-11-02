@@ -5,10 +5,11 @@ namespace App\Http\Controllers\Cash;
 use App\Http\Controllers\Controller;
 use App\Models\Caja;
 use App\Models\CashSession;
+use App\Models\Company;
 use App\Models\PaymentMethod;
 use App\Models\Personal;
+use App\Support\CashSessionCloser;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -109,38 +110,15 @@ class CashSessionController extends Controller
     }
 
     /** Cerrar turno: se cuenta el efectivo y se guarda el arqueo. */
-    public function close(Request $request, CashSession $session)
+    public function close(Request $request, CashSession $session, CashSessionCloser $closer)
     {
         if (! $session->isOpen()) {
             return redirect()->route('cash.sessions.show', $session)
                 ->withErrors(['error' => 'Este turno ya está cerrado.']);
         }
 
-        $data = $request->validate([
-            'closing_amount' => 'required|numeric|min:0',
-            'closing_notes' => 'nullable|string',
-        ], [
-            'closing_amount.required' => 'Indica cuánto efectivo contaste en el cajón.',
-        ]);
-
-        $session->load('movements');
-        $expected = $session->totals()['expected_cash'];
-        $counted = (float) $data['closing_amount'];
-
-        DB::transaction(function () use ($session, $data, $expected, $counted) {
-            $session->update([
-                'status' => 'cerrada',
-                'closed_at' => now(),
-                'closed_by' => auth()->id(),
-                'closing_amount' => $counted,
-                'expected_amount' => $expected,
-                'difference' => $counted - $expected,
-                'closing_notes' => $data['closing_notes'] ?? null,
-            ]);
-
-            // El saldo de la caja pasa a ser lo que de verdad quedó contado.
-            $session->caja->update(['balance' => $counted]);
-        });
+        // Mismo cierre que la API (solo efectivo; total o billetes y monedas).
+        $session = $closer->close($request, $session, Company::findOrFail($session->company_id));
 
         return redirect()->route('cash.sessions.show', $session)
             ->with('success', 'Turno cerrado. El arqueo quedó '.strtolower($session->differenceLabel()).'.');

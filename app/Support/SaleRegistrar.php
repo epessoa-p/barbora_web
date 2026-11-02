@@ -61,7 +61,7 @@ class SaleRegistrar
 
         // La venta es de una sucursal y cobra en una caja de esa sucursal: así
         // su número (V-000001…) es el correlativo de esa sucursal.
-        $data['branch_id'] = $this->resolveBranch($data);
+        $data['branch_id'] = $this->resolveBranch($data, $company);
         $session = $this->resolveCashSession($company, $data['branch_id']);
         $data['branch_id'] ??= $session?->branch_id ?? Branch::defaultIdFor($company->id);
         $warehouse = $this->resolveWarehouse($company, $items, $data['branch_id']);
@@ -254,9 +254,10 @@ class SaleRegistrar
 
     /**
      * La sucursal de la venta, si se puede saber antes de buscar caja: la
-     * indicada, la de su cita o la del barbero. Si no, la decide el turno.
+     * indicada, la de su cita, la del barbero o la de quien cobra. Si no, la
+     * decide el turno.
      */
-    protected function resolveBranch(array $data): ?int
+    protected function resolveBranch(array $data, Company $company): ?int
     {
         $branchId = $data['branch_id'] ?? null;
 
@@ -266,6 +267,15 @@ class SaleRegistrar
 
         if (! $branchId && ! empty($data['personal_id'])) {
             $branchId = Personal::withoutGlobalScopes()->whereKey($data['personal_id'])->value('branch_id');
+        }
+
+        // Quien cobra: su sucursal base (por ejemplo, desde la app, que no
+        // elige sucursal). Solo si ahí hay turno abierto (o no se usa caja):
+        // si no, decide el turno, como siempre, para no bloquear el cobro.
+        if (! $branchId && $userBranch = Branch::idForUser(auth()->user(), $company->id)) {
+            if (! $company->planAllows('caja') || $this->openSessionFor($company->id, $userBranch, strict: true)) {
+                $branchId = $userBranch;
+            }
         }
 
         return $branchId ? (int) $branchId : null;

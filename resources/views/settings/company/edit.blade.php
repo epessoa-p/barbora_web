@@ -114,6 +114,46 @@
                 </div>
             </div>
 
+            @php
+                $denominations = \App\Support\CashSessionCloser::denominations($company);
+                $currentMode = old('cash_count_mode', $company->cash_count_mode ?: 'total');
+            @endphp
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-body p-4">
+                    <h6 class="fw-bold mb-1"><i class="bi bi-cash-coin"></i> Cierre de caja</h6>
+                    <p class="text-muted small mb-3">
+                        Cómo se cuenta el efectivo al cerrar un turno. Solo se arquea el efectivo:
+                        QR, tarjeta y transferencias están en el banco, no en el cajón.
+                    </p>
+                    @foreach(\App\Support\CashSessionCloser::MODES as $value => $label)
+                        <div class="form-check mb-1">
+                            <input class="form-check-input" type="radio" name="cash_count_mode" id="mode-{{ $value }}"
+                                   value="{{ $value }}" {{ $currentMode === $value ? 'checked' : '' }}
+                                   {{ $canEdit ? '' : 'disabled' }}
+                                   {{ $value === 'denominations' && $denominations['bills'] === [] ? 'disabled' : '' }}>
+                            <label class="form-check-label" for="mode-{{ $value }}">
+                                {{ $label }}
+                                <small class="text-muted d-block">
+                                    @if($value === 'total')
+                                        Se escribe el total de efectivo que hay en el cajón.
+                                    @else
+                                        Se indica cuántos billetes y monedas hay de cada valor y el total se calcula solo
+                                        @if($denominations['bills'] !== [])
+                                            ({{ collect(array_merge($denominations['bills'], $denominations['coins']))
+                                                ->map(fn ($v) => \App\Support\Money::symbol($company).' '.rtrim(rtrim(number_format($v, 2, '.', ''), '0'), '.'))
+                                                ->join(', ') }}).
+                                        @else
+                                            (no disponible para la moneda de la barbería).
+                                        @endif
+                                    @endif
+                                </small>
+                            </label>
+                        </div>
+                    @endforeach
+                    @error('cash_count_mode')<div class="text-danger small">{{ $message }}</div>@enderror
+                </div>
+            </div>
+
             @if($canEdit)
                 <button class="btn btn-primary px-4" type="submit">
                     <i class="bi bi-save"></i> Guardar

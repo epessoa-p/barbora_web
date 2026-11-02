@@ -68,6 +68,17 @@
                         <span class="text-muted">Contado al cerrar</span>
                         <span>{{ \App\Support\Money::format($session->closing_amount, $tenantCompany) }}</span>
                     </div>
+                    @if($session->closing_denominations)
+                        {{-- El conteo por billetes y monedas, de mayor a menor. --}}
+                        <div class="py-1 border-bottom small">
+                            @foreach(collect($session->closing_denominations)->sortKeysDesc(SORT_NUMERIC) as $value => $qty)
+                                <div class="d-flex justify-content-between text-muted">
+                                    <span>{{ $qty }} × {{ \App\Support\Money::symbol($tenantCompany) }} {{ rtrim(rtrim($value, '0'), '.') }}</span>
+                                    <span>{{ \App\Support\Money::format($qty * (float) $value, $tenantCompany) }}</span>
+                                </div>
+                            @endforeach
+                        </div>
+                    @endif
                     <div class="d-flex justify-content-between py-2 fw-bold">
                         <span>Diferencia</span>
                         <span class="text-{{ $session->differenceColor() }}">

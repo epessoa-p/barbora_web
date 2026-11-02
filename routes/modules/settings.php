@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Settings\CatalogSettingsController;
 use App\Http\Controllers\Settings\CompanyProfileController;
 use App\Http\Controllers\Settings\PaymentMethodController;
 use Illuminate\Support\Facades\Route;
@@ -26,6 +27,14 @@ Route::prefix('configuracion')->group(function () {
 
     Route::put('/barberia', [CompanyProfileController::class, 'update'])
         ->middleware('check-permission:settings.edit')->name('company-profile.update');
+
+    // Catálogo público: publicarlo, qué muestra, y su enlace / QR / afiche.
+    Route::get('/catalogo', [CatalogSettingsController::class, 'edit'])
+        ->middleware('check-permission:settings.view')->name('catalog-settings.edit');
+    Route::put('/catalogo', [CatalogSettingsController::class, 'update'])
+        ->middleware('check-permission:settings.edit')->name('catalog-settings.update');
+    Route::post('/catalogo/regenerar', [CatalogSettingsController::class, 'regenerate'])
+        ->middleware('check-permission:settings.edit')->name('catalog-settings.regenerate');
 
     Route::prefix('metodos-pago')->name('payment-methods.')->group(function () {
         Route::get('/', [PaymentMethodController::class, 'index'])

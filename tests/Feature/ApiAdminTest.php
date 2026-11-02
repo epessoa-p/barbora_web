@@ -61,6 +61,27 @@ class ApiAdminTest extends TestCase
         ]);
     }
 
+    public function test_se_sube_y_quita_el_logo_desde_la_app(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('public');
+        Sanctum::actingAs($this->admin);
+
+        $this->post('/api/v1/admin/company/logo', [
+            'logo' => \Illuminate\Http\UploadedFile::fake()->image('logo.png', 200, 200),
+        ], $this->headers() + ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonPath('data.logo_url', fn ($url) => str_contains((string) $url, "companies/{$this->company->id}/"));
+
+        $path = $this->company->refresh()->logo;
+        \Illuminate\Support\Facades\Storage::disk('public')->assertExists($path);
+
+        $this->post('/api/v1/admin/company/logo', ['remove_logo' => 1], $this->headers() + ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonPath('data.logo_url', null);
+
+        \Illuminate\Support\Facades\Storage::disk('public')->assertMissing($path);
+    }
+
     public function test_se_crea_y_edita_una_sucursal_con_codigo_automatico(): void
     {
         Sanctum::actingAs($this->admin);

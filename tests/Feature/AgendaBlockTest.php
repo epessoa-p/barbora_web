@@ -330,6 +330,29 @@ class AgendaBlockTest extends TestCase
         $this->assertSame($this->recepcion->id, $appointment->reminded_by);
     }
 
+    public function test_la_app_lista_marca_y_desmarca_recordatorios(): void
+    {
+        $this->bookAt(Carbon::tomorrow()->setTime(10, 0))->assertRedirect();
+        $appointment = $this->inCompany($this->company, fn () => Appointment::firstOrFail());
+
+        \Laravel\Sanctum\Sanctum::actingAs($this->recepcion);
+        $headers = ['X-Company-Id' => (string) $this->company->id];
+
+        $this->getJson('/api/v1/reminders?days=2', $headers)
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $appointment->id)
+            ->assertJsonPath('data.0.reminded_at', null)
+            ->assertJsonPath('data.0.whatsapp_url', fn ($url) => str_starts_with($url, 'https://wa.me/59171234567'));
+
+        $this->postJson("/api/v1/reminders/{$appointment->id}", [], $headers)
+            ->assertOk()
+            ->assertJsonPath('data.reminded_at', fn ($v) => $v !== null);
+        $this->assertSame($this->recepcion->id, $appointment->refresh()->reminded_by);
+
+        $this->deleteJson("/api/v1/reminders/{$appointment->id}", [], $headers)->assertOk();
+        $this->assertFalse($appointment->refresh()->wasReminded());
+    }
+
     public function test_el_recordatorio_se_puede_desmarcar(): void
     {
         $tomorrow = Carbon::tomorrow()->setTime(10, 0);

@@ -64,6 +64,33 @@ class Branch extends Model
     }
 
     /**
+     * La sucursal base del usuario (la de su ficha de personal) en esa
+     * empresa. Null si no tiene ficha o no tiene sucursal.
+     */
+    public static function idForUser(?User $user, ?int $companyId): ?int
+    {
+        if (! $user || ! $companyId) {
+            return null;
+        }
+
+        $id = Personal::withoutGlobalScopes()
+            ->where('company_id', $companyId)
+            ->where('user_id', $user->id)
+            ->value('branch_id');
+
+        return $id ? (int) $id : null;
+    }
+
+    /**
+     * La que se propone en los formularios: la del usuario y, si no tiene, la
+     * por defecto de la empresa.
+     */
+    public static function preferredIdFor(?User $user, ?int $companyId): ?int
+    {
+        return static::idForUser($user, $companyId) ?? ($companyId ? static::defaultIdFor($companyId) : null);
+    }
+
+    /**
      * Siguiente código libre de la empresa: S01, S02…
      *
      * Con allCompanies() y borradas incluidas, igual que Warehouse::nextCodeFor:

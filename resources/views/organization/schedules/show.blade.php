@@ -104,18 +104,13 @@
                         </div>
                     </div>
 
-                    <div class="mb-3">
-                        <label for="branch_id" class="form-label">Sucursal</label>
-                        <select id="branch_id" name="branch_id" class="form-select">
-                            <option value="">Cualquier sucursal</option>
-                            @foreach($branches as $branch)
-                                <option value="{{ $branch->id }}" {{ (string) old('branch_id') === (string) $branch->id ? 'selected' : '' }}>
-                                    {{ $branch->name }}
-                                </option>
-                            @endforeach
-                        </select>
-                        @error('branch_id')<div class="text-danger small">{{ $message }}</div>@enderror
-                    </div>
+                    @include('partials.branch-select', [
+                        'branches' => $branches,
+                        'selected' => $personal->branch_id ?? null,
+                        'placeholder' => 'Cualquier sucursal',
+                        'wrapper' => 'mb-3',
+                        'emptyWhenSingle' => true,
+                    ])
 
                     <button class="btn btn-primary w-100">
                         <i class="bi bi-plus-circle"></i> Añadir al horario

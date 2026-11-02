@@ -2,12 +2,15 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Http\Controllers\Concerns\HandlesCompanyLogo;
 use App\Models\Branch;
 use App\Models\Caja;
 use App\Models\Company;
 use App\Models\PaymentMethod;
 use App\Models\Personal;
 use App\Support\CajaForm;
+use App\Support\CashSessionCloser;
+use App\Support\Catalog;
 use App\Support\PaymentMethodForm;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -24,6 +27,8 @@ use Illuminate\Validation\Rule;
  */
 class AdminController extends ApiController
 {
+    use HandlesCompanyLogo;
+
     /* ── Mi empresa ──────────────────────────────────────────────────────── */
 
     public function company(Request $request): JsonResponse
@@ -32,7 +37,7 @@ class AdminController extends ApiController
     }
 
     /**
-     * Los datos de texto. El logo se sube desde la web, y el NIT no se edita
+     * Los datos de texto (el logo va por updateLogo). El NIT no se edita
      * (con él el operador verifica a quien pide soporte).
      */
     public function updateCompany(Request $request): JsonResponse
@@ -45,6 +50,8 @@ class AdminController extends ApiController
             'phone' => ['nullable', 'string', 'max:30'],
             'email' => ['nullable', 'email', 'max:255'],
             'receipt_footer' => ['nullable', 'string', 'max:255'],
+            // Cómo se cierra caja; si no llega (app vieja), no se toca.
+            'cash_count_mode' => ['sometimes', 'in:'.implode(',', array_keys(CashSessionCloser::MODES))],
         ], [
             'name.required' => 'El nombre de la barbería es obligatorio.',
         ]);
@@ -55,12 +62,85 @@ class AdminController extends ApiController
             'phone' => $data['phone'] ?? null,
             'email' => $data['email'] ?? null,
             'receipt_footer' => $data['receipt_footer'] ?? null,
+            ...(array_key_exists('cash_count_mode', $data) ? ['cash_count_mode' => $data['cash_count_mode']] : []),
         ]);
 
         return $this->json([
             'message' => 'Datos de la barbería actualizados.',
             'data' => $this->companyPayload($company->refresh()),
         ]);
+    }
+
+    /** Subir o quitar el logo. Mismas reglas de archivo que la web. */
+    public function updateLogo(Request $request): JsonResponse
+    {
+        $company = $this->tenant($request);
+
+        $request->validate([
+            'logo' => ['required_without:remove_logo', 'nullable', 'image', 'mimes:png,jpg,jpeg,webp', 'max:1024'],
+            'remove_logo' => ['nullable', 'boolean'],
+        ], [
+            'logo.required_without' => 'Elige una imagen.',
+            'logo.max' => 'El logo no puede pesar más de 1 MB.',
+            'logo.mimes' => 'El logo tiene que ser PNG, JPG o WEBP.',
+        ]);
+
+        $this->syncCompanyLogo($request, $company);
+
+        return $this->json([
+            'message' => $company->logo ? 'Logo actualizado.' : 'Logo quitado.',
+            'data' => $this->companyPayload($company->refresh()),
+        ]);
+    }
+
+    /* ── Catálogo público ────────────────────────────────────────────────── */
+
+    public function catalog(Request $request): JsonResponse
+    {
+        return $this->json(['data' => $this->catalogPayload($this->tenant($request))]);
+    }
+
+    public function updateCatalog(Request $request): JsonResponse
+    {
+        $company = $this->tenant($request);
+
+        $data = $request->validate([
+            'enabled' => ['sometimes', 'boolean'],
+            'show_products' => ['sometimes', 'boolean'],
+        ]);
+
+        $company->update([
+            ...(array_key_exists('enabled', $data) ? ['catalog_enabled' => (bool) $data['enabled']] : []),
+            ...(array_key_exists('show_products', $data) ? ['catalog_show_products' => (bool) $data['show_products']] : []),
+        ]);
+
+        return $this->json([
+            'message' => $company->catalog_enabled ? 'Catálogo publicado.' : 'Catálogo sin publicar.',
+            'data' => $this->catalogPayload($company),
+        ]);
+    }
+
+    /** Enlace nuevo: el anterior (y los QR impresos) dejan de funcionar. */
+    public function regenerateCatalog(Request $request): JsonResponse
+    {
+        $company = $this->tenant($request);
+        Catalog::regenerate($company);
+
+        return $this->json([
+            'message' => 'Enlace nuevo generado. El anterior y su QR ya no funcionan.',
+            'data' => $this->catalogPayload($company),
+        ]);
+    }
+
+    protected function catalogPayload(Company $company): array
+    {
+        return [
+            'enabled' => (bool) $company->catalog_enabled,
+            'show_products' => (bool) $company->catalog_show_products,
+            'url' => Catalog::url($company),
+            'poster_url' => Catalog::posterUrl($company),
+            'services_count' => Catalog::services($company)->flatten()->count(),
+        ];
     }
 
     /* ── Sucursales ──────────────────────────────────────────────────────── */
@@ -263,6 +343,7 @@ class AdminController extends ApiController
             'phone' => $company->phone,
             'email' => $company->email,
             'receipt_footer' => $company->receipt_footer,
+            'cash_count_mode' => $company->cash_count_mode ?: 'total',
             'logo_url' => $company->logoUrl(),
         ];
     }

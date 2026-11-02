@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\InventoryController;
 use App\Http\Controllers\Api\V1\MyController;
 use App\Http\Controllers\Api\V1\PersonalController;
+use App\Http\Controllers\Api\V1\ReminderController;
 use App\Http\Controllers\Api\V1\ReportController;
 use App\Http\Controllers\Api\V1\SaleController;
 use Illuminate\Support\Facades\Route;
@@ -67,6 +68,14 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/service-categories', [CatalogController::class, 'serviceCategories'])
             ->middleware('check-permission:services.view')->name('service-categories');
 
+        // Administrar categorías (también las inactivas), como en la web.
+        Route::get('/service-categories/manage', [CatalogController::class, 'manageCategories'])
+            ->middleware('check-permission:service_categories.view')->name('service-categories.manage');
+        Route::post('/service-categories', [CatalogController::class, 'storeCategory'])
+            ->middleware('check-permission:service_categories.create')->name('service-categories.store');
+        Route::put('/service-categories/{serviceCategory}', [CatalogController::class, 'updateCategory'])
+            ->middleware('check-permission:service_categories.edit')->name('service-categories.update');
+
         // Editar un servicio (precio, duración, nombre…) desde el móvil.
         Route::put('/services/{service}', [CatalogController::class, 'updateService'])
             ->middleware('check-permission:services.edit')->name('services.update');
@@ -104,6 +113,16 @@ Route::middleware('auth:sanctum')->group(function () {
             ->middleware('check-permission:agenda_blocks.edit')->name('agenda-blocks.update');
         Route::delete('/agenda-blocks/{agendaBlock}', [AgendaBlockController::class, 'destroy'])
             ->middleware('check-permission:agenda_blocks.delete')->name('agenda-blocks.destroy');
+
+        // Recordatorios: como en la web, además exigen «reservas_online».
+        Route::middleware('plan:reservas_online')->group(function () {
+            Route::get('/reminders', [ReminderController::class, 'index'])
+                ->middleware('check-permission:appointments.view')->name('reminders');
+            Route::post('/reminders/{appointment}', [ReminderController::class, 'store'])
+                ->middleware('check-permission:appointments.edit')->name('reminders.store');
+            Route::delete('/reminders/{appointment}', [ReminderController::class, 'destroy'])
+                ->middleware('check-permission:appointments.edit')->name('reminders.destroy');
+        });
     });
 
     // ── Barberos (personal) ─────────────────────────────────────────────────
@@ -227,6 +246,9 @@ Route::middleware('auth:sanctum')->group(function () {
             ->middleware('check-permission:settings.view')->name('company');
         Route::put('/company', [AdminController::class, 'updateCompany'])
             ->middleware('check-permission:settings.edit')->name('company.update');
+        // Multipart (POST: PHP no lee archivos en un PUT).
+        Route::post('/company/logo', [AdminController::class, 'updateLogo'])
+            ->middleware('check-permission:settings.edit')->name('company.logo');
 
         Route::get('/branches', [AdminController::class, 'branches'])
             ->middleware('check-permission:branches.view')->name('branches');
@@ -245,6 +267,14 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::put('/cajas/{caja}', [AdminController::class, 'updateCaja'])
                 ->middleware('check-permission:cajas.edit')->name('cajas.update');
         });
+
+        // Catálogo público: publicarlo, qué muestra y su enlace / QR / afiche.
+        Route::get('/catalog', [AdminController::class, 'catalog'])
+            ->middleware('check-permission:settings.view')->name('catalog');
+        Route::put('/catalog', [AdminController::class, 'updateCatalog'])
+            ->middleware('check-permission:settings.edit')->name('catalog.update');
+        Route::post('/catalog/regenerate', [AdminController::class, 'regenerateCatalog'])
+            ->middleware('check-permission:settings.edit')->name('catalog.regenerate');
 
         Route::get('/payment-methods', [AdminController::class, 'paymentMethods'])
             ->middleware('check-permission:settings.view')->name('payment-methods');

@@ -25,11 +25,14 @@ class Company extends Model
 
     protected $fillable = [
         'name', 'tax_id', 'tax_id_label', 'country', 'currency', 'timezone',
-        'address', 'phone', 'email', 'logo', 'description', 'receipt_footer', 'active',
+        'address', 'phone', 'email', 'logo', 'description', 'receipt_footer', 'cash_count_mode',
+        'catalog_enabled', 'catalog_token', 'catalog_show_products', 'active',
     ];
 
     protected $casts = [
         'active' => 'boolean',
+        'catalog_enabled' => 'boolean',
+        'catalog_show_products' => 'boolean',
         'deleted_at' => 'datetime',
     ];
 

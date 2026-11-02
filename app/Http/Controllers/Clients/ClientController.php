@@ -31,6 +31,19 @@ class ClientController extends Controller
     {
         $client = Client::create($this->validated($request));
 
+        // Alta rápida desde el modal de «Nueva cita»: sin recargar la página,
+        // el formulario añade el cliente al select y lo deja elegido.
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => "Cliente «{$client->full_name}» registrado.",
+                'data' => [
+                    'id' => $client->id,
+                    'full_name' => $client->full_name,
+                    'phone' => $client->phone,
+                ],
+            ], 201);
+        }
+
         return redirect()->route('clients.show', $client)
             ->with('success', "Cliente «{$client->full_name}» registrado exitosamente.");
     }

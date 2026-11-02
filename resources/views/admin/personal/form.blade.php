@@ -53,21 +53,13 @@
                             </select>
                         </div>
 
-                        @if($branches->isNotEmpty())
-                            <div class="col-md-6">
-                                <label class="form-label">Sucursal <span class="text-danger">*</span></label>
-                                <select name="branch_id" class="form-select @error('branch_id') is-invalid @enderror" required>
-                                    @if($branches->count() > 1)<option value="">Seleccionar sucursal</option>@endif
-                                    @foreach($branches as $branch)
-                                        <option value="{{ $branch->id }}" {{ (string) old('branch_id', $personal?->branch_id) === (string) $branch->id ? 'selected' : '' }}>
-                                            {{ $branch->name }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                                <small class="text-muted">Donde atiende y cobra: sus citas y ventas se numeran en esta sucursal.</small>
-                                @error('branch_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                            </div>
-                        @endif
+                        @include('partials.branch-select', [
+                            'branches' => $branches,
+                            'selected' => $personal?->branch_id ?? \App\Models\Branch::preferredIdFor(auth()->user(), $tenantCompany?->id),
+                            'required' => true,
+                            'placeholder' => 'Seleccionar sucursal',
+                            'help' => 'Donde atiende y cobra: sus citas y ventas se numeran en esta sucursal.',
+                        ])
 
                         <div class="col-md-8">
                             <label class="form-label">Nombre completo <span class="text-danger">*</span></label>

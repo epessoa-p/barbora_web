@@ -307,6 +307,74 @@ class SaleTest extends TestCase
         $this->assertSame($session->id, Sale::allCompanies()->first()->cash_session_id);
     }
 
+    public function test_la_pantalla_de_cobro_ofrece_pills_mixto_y_cliente_nuevo(): void
+    {
+        $company = $this->company(['pos', 'caja', 'inventario', 'agenda', 'clientes']);
+        $user = $this->userInCompany($company, ['sales.view', 'sales.create', 'clients.create']);
+
+        $this->actingInCompany($user, $company)
+            ->get(route('sales.create'))
+            ->assertOk()
+            ->assertSee('id="pill-efectivo"', false)
+            ->assertSee('id="mixed-payment"', false)
+            ->assertSee('new-client-modal');
+    }
+
+    public function test_la_sucursal_propuesta_es_la_del_usuario_y_se_oculta_si_hay_una(): void
+    {
+        $company = $this->company();
+        $norte = Branch::factory()->create(['company_id' => $company->id, 'name' => 'NORTE']);
+        $user = $this->userInCompany($company, ['sales.view', 'sales.create']);
+
+        // Una sola sucursal: no hay selector, va oculta.
+        $this->actingInCompany($user, $company)
+            ->get(route('sales.create'))
+            ->assertDontSee('<select id="branch_id"', false)
+            ->assertSee('<input type="hidden" name="branch_id" id="branch_id"'."\n".'           value="'.$norte->id.'"', false);
+
+        // Con dos, se propone la de la ficha de personal del usuario.
+        $sur = Branch::factory()->create(['company_id' => $company->id, 'name' => 'SUR']);
+        Personal::withoutGlobalScopes()->create([
+            'company_id' => $company->id, 'user_id' => $user->id, 'full_name' => 'CAJERO',
+            'branch_id' => $sur->id, 'active' => true,
+        ]);
+
+        $html = $this->actingInCompany($user, $company)->get(route('sales.create'))->getContent();
+        $this->assertMatchesRegularExpression('/<option value="'.$sur->id.'"\s+selected>/', $html);
+    }
+
+    public function test_sin_sucursal_la_venta_va_a_la_del_usuario_si_tiene_caja_abierta(): void
+    {
+        $company = $this->company();
+        $this->warehouse($company);
+        $sur = Branch::factory()->create(['company_id' => $company->id]);
+        $service = $this->service($company, 50);
+        $user = $this->userInCompany($company, ['sales.view', 'sales.create']);
+        Personal::withoutGlobalScopes()->create([
+            'company_id' => $company->id, 'user_id' => $user->id, 'full_name' => 'CAJERO',
+            'branch_id' => $sur->id, 'active' => true,
+        ]);
+
+        $sale = fn () => $this->actingInCompany($user, $company)->post(route('sales.store'), [
+            'items' => [['type' => 'servicio', 'id' => $service->id, 'quantity' => 1]],
+            'payments' => [['payment_method' => 'efectivo', 'amount' => 50]],
+        ])->assertRedirect();
+
+        // Sin caja abierta en su sucursal: decide el turno abierto, como antes.
+        $other = $this->openCash($company);
+        $sale();
+        $this->assertSame($other->id, Sale::allCompanies()->latest('id')->first()->cash_session_id);
+
+        // Con caja abierta en su sucursal: la venta es de esa sucursal.
+        $mine = $this->openCash($company);
+        $mine->caja->update(['branch_id' => $sur->id]);
+        $mine->update(['branch_id' => $sur->id]);
+        $sale();
+        $last = Sale::allCompanies()->latest('id')->first();
+        $this->assertSame($sur->id, $last->branch_id);
+        $this->assertSame($mine->id, $last->cash_session_id);
+    }
+
     public function test_sin_turno_abierto_no_se_puede_cobrar(): void
     {
         $company = $this->company();

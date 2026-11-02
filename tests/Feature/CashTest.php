@@ -241,6 +241,72 @@ class CashTest extends TestCase
         $this->assertSame('295.00', $caja->refresh()->balance);
     }
 
+    public function test_se_cierra_contando_billetes_y_monedas(): void
+    {
+        $company = $this->companyWithPlan();
+        $company->update(['cash_count_mode' => 'denominations']);
+        $caja = $this->caja($company, ['balance' => 0]);
+        $session = $this->openSession($company, $caja, 200);
+        $this->move($session, 'ingreso', 'efectivo', 100.5);
+        // Lo cobrado por QR no entra al cajón ni al arqueo.
+        $this->move($session, 'ingreso', 'qr', 80);
+        $user = $this->userInCompany($company, ['cash.view', 'cash.edit']);
+
+        // El formulario ofrece los billetes de la moneda y lo cobrado por QR aparte.
+        $this->actingInCompany($user, $company)
+            ->get(route('cash.current'))
+            ->assertOk()
+            ->assertSee('denominations[200.00]', false)
+            ->assertSee('Otras formas de pago');
+
+        // 1×200 + 1×100 + 1×0.50 = 300.50; una clave inventada se ignora y el
+        // closing_amount que mande el navegador no cuenta: lo calcula el servidor.
+        $this->actingInCompany($user, $company)
+            ->put(route('cash.sessions.close', $session), [
+                'closing_amount' => 9999,
+                'denominations' => ['200.00' => 1, '100.00' => 1, '0.50' => 1, '3.00' => 5],
+            ])
+            ->assertRedirect(route('cash.sessions.show', $session));
+
+        $session->refresh();
+
+        $this->assertSame('300.50', $session->closing_amount);
+        $this->assertSame('300.50', $session->expected_amount);
+        $this->assertSame('Cuadrada', $session->differenceLabel());
+        $this->assertSame(['200.00' => 1, '100.00' => 1, '0.50' => 1], $session->closing_denominations);
+        $this->assertSame('300.50', $caja->refresh()->balance);
+    }
+
+    public function test_por_billetes_sin_contar_nada_no_cierra(): void
+    {
+        $company = $this->companyWithPlan();
+        $company->update(['cash_count_mode' => 'denominations']);
+        $session = $this->openSession($company, $this->caja($company), 0);
+        $user = $this->userInCompany($company, ['cash.view', 'cash.edit']);
+
+        $this->actingInCompany($user, $company)
+            ->put(route('cash.sessions.close', $session), [])
+            ->assertSessionHasErrors('denominations');
+
+        $this->assertTrue($session->refresh()->isOpen());
+    }
+
+    public function test_el_modo_de_cierre_se_configura_en_mi_empresa(): void
+    {
+        $company = $this->companyWithPlan();
+        $user = $this->userInCompany($company, ['settings.view', 'settings.edit']);
+
+        $this->actingInCompany($user, $company)
+            ->put(route('company-profile.update'), ['name' => $company->name, 'cash_count_mode' => 'denominations'])
+            ->assertRedirect();
+
+        $this->assertSame('denominations', $company->refresh()->cash_count_mode);
+
+        $this->actingInCompany($user, $company)
+            ->put(route('company-profile.update'), ['name' => $company->name, 'cash_count_mode' => 'otro'])
+            ->assertSessionHasErrors('cash_count_mode');
+    }
+
     public function test_un_turno_cerrado_no_se_cierra_dos_veces(): void
     {
         $company = $this->companyWithPlan();

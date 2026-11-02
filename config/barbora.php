@@ -50,15 +50,25 @@ return [
     |
     */
 
+    // «bills» y «coins»: lo que se cuenta al cerrar caja cuando la barbería
+    // arquea por billetes y monedas (de mayor a menor).
     'currencies' => [
-        'BOB' => ['symbol' => 'Bs',  'decimals' => 2],
-        'PEN' => ['symbol' => 'S/',  'decimals' => 2],
-        'CLP' => ['symbol' => '$',   'decimals' => 0],
-        'COP' => ['symbol' => '$',   'decimals' => 0],
-        'MXN' => ['symbol' => '$',   'decimals' => 2],
-        'ARS' => ['symbol' => '$',   'decimals' => 2],
-        'USD' => ['symbol' => '$',   'decimals' => 2],
-        'EUR' => ['symbol' => '€',   'decimals' => 2],
+        'BOB' => ['symbol' => 'Bs', 'decimals' => 2,
+            'bills' => [200, 100, 50, 20, 10], 'coins' => [5, 2, 1, 0.5, 0.2, 0.1]],
+        'PEN' => ['symbol' => 'S/', 'decimals' => 2,
+            'bills' => [200, 100, 50, 20, 10], 'coins' => [5, 2, 1, 0.5, 0.2, 0.1]],
+        'CLP' => ['symbol' => '$', 'decimals' => 0,
+            'bills' => [20000, 10000, 5000, 2000, 1000], 'coins' => [500, 100, 50, 10]],
+        'COP' => ['symbol' => '$', 'decimals' => 0,
+            'bills' => [100000, 50000, 20000, 10000, 5000, 2000], 'coins' => [1000, 500, 200, 100, 50]],
+        'MXN' => ['symbol' => '$', 'decimals' => 2,
+            'bills' => [1000, 500, 200, 100, 50, 20], 'coins' => [10, 5, 2, 1, 0.5]],
+        'ARS' => ['symbol' => '$', 'decimals' => 2,
+            'bills' => [20000, 10000, 2000, 1000, 500, 200, 100], 'coins' => [50, 20, 10, 5, 2, 1]],
+        'USD' => ['symbol' => '$', 'decimals' => 2,
+            'bills' => [100, 50, 20, 10, 5, 1], 'coins' => [0.25, 0.1, 0.05, 0.01]],
+        'EUR' => ['symbol' => '€', 'decimals' => 2,
+            'bills' => [500, 200, 100, 50, 20, 10, 5], 'coins' => [2, 1, 0.5, 0.2, 0.1, 0.05, 0.02, 0.01]],
     ],
 
     /*

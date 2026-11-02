@@ -60,18 +60,14 @@
                         <small class="text-muted">Sin elegir barbero, cierra la agenda de todos.</small>
                     </div>
 
-                    <div class="col-md-6">
-                        <label class="form-label">Sucursal</label>
-                        <select name="branch_id" class="form-select">
-                            <option value="">Todas</option>
-                            @foreach($branches as $branch)
-                                <option value="{{ $branch->id }}"
-                                    {{ (string) old('branch_id', $block?->branch_id) === (string) $branch->id ? 'selected' : '' }}>
-                                    {{ $branch->name }}
-                                </option>
-                            @endforeach
-                        </select>
-                    </div>
+                    {{-- «Todas» es el alcance natural de un bloqueo (un feriado), así
+                         que aquí no se propone la sucursal del usuario. --}}
+                    @include('partials.branch-select', [
+                        'branches' => $branches,
+                        'selected' => $block?->branch_id,
+                        'placeholder' => 'Todas',
+                        'emptyWhenSingle' => true,
+                    ])
                 </div>
             </div>
         </div>

@@ -2,6 +2,11 @@
     $start = $appointment?->starts_at ?? ($defaults['starts_at'] ?? now());
     $selectedServices = old('services', $appointment?->services->pluck('id')->all() ?? []);
     $selectedPersonal = old('personal_id', $appointment?->personal_id ?? ($defaults['personal_id'] ?? null));
+
+    // El alta rápida de cliente pide lo mismo que la pantalla de clientes:
+    // el módulo en el plan y el permiso.
+    $canCreateClient = (auth()->user()->is_super_admin || (bool) $tenantCompany?->planAllows('clientes'))
+        && auth()->user()->hasPermissionInCompany('clients.create', $tenantCompany);
 @endphp
 
 <form action="{{ $appointment ? route('appointments.update', $appointment) : route('appointments.store') }}"
@@ -36,7 +41,8 @@
                                 class="form-select @error('personal_id') is-invalid @enderror" required>
                             <option value="">Elegir barbero</option>
                             @foreach($staff as $person)
-                                <option value="{{ $person->id }}" {{ (string) $selectedPersonal === (string) $person->id ? 'selected' : '' }}>
+                                <option value="{{ $person->id }}" data-branch="{{ $person->branch_id }}"
+                                        {{ (string) $selectedPersonal === (string) $person->id ? 'selected' : '' }}>
                                     {{ $person->full_name }}{{ $person->specialty ? ' · '.$person->specialty : '' }}
                                 </option>
                             @endforeach
@@ -44,18 +50,12 @@
                         @error('personal_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
 
-                    <div class="col-md-6">
-                        <label for="branch_id" class="form-label">Sucursal</label>
-                        <select id="branch_id" name="branch_id" class="form-select @error('branch_id') is-invalid @enderror">
-                            <option value="">Sin especificar</option>
-                            @foreach($branches as $branch)
-                                <option value="{{ $branch->id }}" {{ (string) old('branch_id', $appointment?->branch_id) === (string) $branch->id ? 'selected' : '' }}>
-                                    {{ $branch->name }}
-                                </option>
-                            @endforeach
-                        </select>
-                        @error('branch_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                    </div>
+                    {{-- La del usuario; al elegir barbero pasa a la suya (la cita va
+                         en la sucursal donde él atiende). --}}
+                    @include('partials.branch-select', [
+                        'branches' => $branches,
+                        'selected' => $appointment?->branch_id ?? \App\Models\Branch::preferredIdFor(auth()->user(), $tenantCompany?->id),
+                    ])
 
                     <div class="col-12">
                         <label for="client_id" class="form-label">Cliente</label>
@@ -69,9 +69,11 @@
                             @endforeach
                         </select>
                         @error('client_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                        <small class="text-muted">
-                            ¿No está en la lista? <a href="{{ route('clients.create') }}" target="_blank">Regístralo primero</a>.
-                        </small>
+                        @if($canCreateClient)
+                            <button type="button" class="btn btn-link btn-sm px-0" data-bs-toggle="modal" data-bs-target="#new-client-modal">
+                                <i class="bi bi-person-plus"></i> Nuevo cliente
+                            </button>
+                        @endif
                     </div>
 
                     @if($appointment)
@@ -158,6 +160,10 @@
     </div>
 </form>
 
+@if($canCreateClient)
+    @include('clients.partials.quick-create', ['selectId' => 'client_id'])
+@endif
+
 @push('scripts')
 <script>
 (function () {
@@ -185,6 +191,14 @@
 
     checks.forEach((c) => c.addEventListener('change', refresh));
     refresh();
+
+    // La sucursal sigue al barbero: la cita va donde él atiende.
+    const barber = document.getElementById('personal_id');
+    const branch = document.querySelector('select#branch_id');
+    barber?.addEventListener('change', function () {
+        const branchId = barber.selectedOptions[0]?.dataset.branch;
+        if (branch && branchId) branch.value = branchId;
+    });
 })();
 </script>
 @endpush

@@ -10,6 +10,7 @@ use App\Models\Product;
 use App\Models\Service;
 use App\Models\ServiceCategory;
 use App\Support\ClientForm;
+use App\Support\ServiceCategoryForm;
 use App\Support\ServiceForm;
 use App\Support\ShopTime;
 use Illuminate\Http\JsonResponse;
@@ -44,6 +45,50 @@ class CatalogController extends ApiController
         return $this->json(['data' => $categories->map(fn ($c) => [
             'id' => $c->id, 'name' => $c->name,
         ])->all()]);
+    }
+
+    /** Todas las categorías (también inactivas), con sus servicios, para administrarlas. */
+    public function manageCategories(): JsonResponse
+    {
+        $categories = ServiceCategory::withCount('services')
+            ->orderBy('sort_order')->orderBy('name')->get();
+
+        return $this->json(['data' => $categories->map($this->categoryPayload(...))->all()]);
+    }
+
+    public function storeCategory(Request $request, ServiceCategoryForm $form): JsonResponse
+    {
+        $companyId = $request->attributes->get('tenant_company')->id;
+
+        $category = ServiceCategory::create($form->validate($request, $companyId) + ['company_id' => $companyId]);
+
+        return $this->json([
+            'message' => "Categoría «{$category->name}» creada.",
+            'data' => $this->categoryPayload($category->loadCount('services')),
+        ], 201);
+    }
+
+    public function updateCategory(Request $request, ServiceCategory $serviceCategory, ServiceCategoryForm $form): JsonResponse
+    {
+        $serviceCategory->update($form->validate($request, $serviceCategory->company_id, $serviceCategory));
+
+        return $this->json([
+            'message' => 'Categoría actualizada.',
+            'data' => $this->categoryPayload($serviceCategory->loadCount('services')),
+        ]);
+    }
+
+    protected function categoryPayload(ServiceCategory $category): array
+    {
+        return [
+            'id' => $category->id,
+            'name' => $category->name,
+            'description' => $category->description,
+            'color' => $category->color,
+            'sort_order' => (int) $category->sort_order,
+            'active' => (bool) $category->active,
+            'services_count' => (int) ($category->services_count ?? 0),
+        ];
     }
 
     /**

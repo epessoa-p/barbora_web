@@ -4,8 +4,8 @@ namespace App\Http\Controllers\Services;
 
 use App\Http\Controllers\Controller;
 use App\Models\ServiceCategory;
+use App\Support\ServiceCategoryForm;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 
 class ServiceCategoryController extends Controller
 {
@@ -60,29 +60,14 @@ class ServiceCategoryController extends Controller
             ->with('success', 'Categoría eliminada exitosamente.');
     }
 
+    /** Las reglas viven en ServiceCategoryForm: la API del móvil usa las mismas. */
     protected function validated(Request $request, ?ServiceCategory $category = null): array
     {
-        $companyId = $category?->company_id ?? $this->targetCompanyId();
-
-        $data = $request->validate([
-            'name' => [
-                'required', 'string', 'max:255',
-                Rule::unique('service_categories', 'name')
-                    ->where(fn ($q) => $q->where('company_id', $companyId))
-                    ->ignore($category?->id),
-            ],
-            'description' => 'nullable|string|max:255',
-            'color' => ['required', 'regex:/^#[0-9A-Fa-f]{6}$/'],
-            'sort_order' => 'nullable|integer|min:0',
-            'active' => 'sometimes|boolean',
-        ], [
-            'name.unique' => 'Ya existe una categoría con ese nombre.',
-            'color.regex' => 'El color debe ser un valor hexadecimal, por ejemplo #1f2937.',
-        ]);
-
-        $data['sort_order'] = $data['sort_order'] ?? 0;
-        $data['active'] = $request->boolean('active');
-
-        return $data;
+        return app(ServiceCategoryForm::class)->validate(
+            $request,
+            $category?->company_id ?? $this->targetCompanyId(),
+            $category,
+            activeIsCheckbox: true,
+        );
     }
 }

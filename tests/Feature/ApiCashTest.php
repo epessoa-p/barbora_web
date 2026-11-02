@@ -345,6 +345,31 @@ class ApiCashTest extends TestCase
         $this->assertSame('Faltante', $response->json('data.difference_label'));
     }
 
+    public function test_la_app_cierra_por_billetes_y_deja_el_saldo_de_la_caja(): void
+    {
+        $this->company->update(['cash_count_mode' => 'denominations']);
+        $session = $this->openSession(openingAmount: 100);
+
+        Sanctum::actingAs($this->cajero);
+
+        // /me le dice a la app cómo se cierra y con qué billetes.
+        $this->withHeaders($this->headers())->getJson('/api/v1/me')
+            ->assertJsonPath('company.cash_count_mode', 'denominations')
+            ->assertJsonPath('company.cash_denominations.bills.0', 200.0);
+
+        $this->withHeaders($this->headers())
+            ->putJson("/api/v1/cash/session/{$session->id}/close", [
+                'denominations' => ['50.00' => 2],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.closing_amount', 100.0)
+            ->assertJsonPath('data.closing_denominations', ['50.00' => 2])
+            ->assertJsonPath('data.difference_label', 'Cuadrada');
+
+        // Antes, cerrar desde la app no actualizaba el saldo de la caja.
+        $this->assertSame('100.00', $session->caja->refresh()->balance);
+    }
+
     public function test_el_historial_trae_los_turnos_con_su_arqueo(): void
     {
         $session = $this->openSession(openingAmount: 100);

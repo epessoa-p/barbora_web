@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\CatalogController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\SubscriptionBlockedController;
 use Illuminate\Support\Facades\Route;
@@ -23,6 +24,13 @@ use Illuminate\Support\Facades\Route;
 */
 
 require __DIR__.'/auth.php';
+
+// Catálogo público de una barbería: sin sesión, por el enlace con token (lo
+// que se comparte o se imprime como QR). Ver App\Support\Catalog.
+Route::get('/catalogo/{token}', [CatalogController::class, 'show'])
+    ->where('token', '[a-z0-9]{8,32}')->name('catalog.public');
+Route::get('/catalogo/{token}/afiche', [CatalogController::class, 'poster'])
+    ->where('token', '[a-z0-9]{8,32}')->name('catalog.poster');
 
 Route::middleware('auth')->group(function () {
     // Pantallas transversales, sin módulo propio.

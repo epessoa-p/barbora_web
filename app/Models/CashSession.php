@@ -24,7 +24,7 @@ class CashSession extends Model
     protected $fillable = [
         'company_id', 'caja_id', 'branch_id', 'number', 'status',
         'opened_at', 'opened_by', 'opening_amount', 'opening_notes',
-        'closed_at', 'closed_by', 'closing_amount', 'expected_amount', 'difference', 'closing_notes',
+        'closed_at', 'closed_by', 'closing_amount', 'closing_denominations', 'expected_amount', 'difference', 'closing_notes',
     ];
 
     protected $casts = [
@@ -32,6 +32,7 @@ class CashSession extends Model
         'closed_at' => 'datetime',
         'opening_amount' => 'decimal:2',
         'closing_amount' => 'decimal:2',
+        'closing_denominations' => 'array',
         'expected_amount' => 'decimal:2',
         'difference' => 'decimal:2',
     ];

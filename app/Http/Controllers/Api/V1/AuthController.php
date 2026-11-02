@@ -155,6 +155,10 @@ class AuthController extends ApiController
             'email' => $company->email,
             'logo_url' => $company->logoUrl(),
             'receipt_footer' => $company->receiptFooter(),
+            // Cómo se cierra caja: «total» o «denominations» (billetes y
+            // monedas, que salen de la moneda de la empresa).
+            'cash_count_mode' => \App\Support\CashSessionCloser::countsDenominations($company) ? 'denominations' : 'total',
+            'cash_denominations' => \App\Support\CashSessionCloser::denominations($company),
         ];
     }
 
@@ -181,6 +185,8 @@ class AuthController extends ApiController
             'bookable' => (bool) $personal->bookable,
             'photo_url' => $personal->photoUrl(),
             'agenda_color' => $personal->agenda_color,
+            // Su sucursal base: la que la app propone en los formularios.
+            'branch_id' => $personal->branch_id,
         ];
     }
 
