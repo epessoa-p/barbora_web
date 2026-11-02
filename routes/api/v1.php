@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\V1\AdminController;
 use App\Http\Controllers\Api\V1\AgendaBlockController;
 use App\Http\Controllers\Api\V1\AgendaController;
 use App\Http\Controllers\Api\V1\AuthController;
@@ -112,6 +113,9 @@ Route::middleware('auth:sanctum')->group(function () {
         ->middleware('check-permission:personal.view')->name('personal');
     Route::get('/cargos', [PersonalController::class, 'cargos'])
         ->middleware('check-permission:personal.view')->name('cargos');
+    // Cargos y sucursales para el formulario (la app vieja sigue con /cargos).
+    Route::get('/personal/options', [PersonalController::class, 'options'])
+        ->middleware('check-permission:personal.view')->name('personal.options');
     Route::post('/personal', [PersonalController::class, 'store'])
         ->middleware('check-permission:personal.create')->name('personal.store');
     Route::put('/personal/{personal}', [PersonalController::class, 'update'])
@@ -214,6 +218,41 @@ Route::middleware('auth:sanctum')->group(function () {
         ->middleware(['plan:estadisticas', 'check-permission:reports.view'])
         ->whereIn('type', array_keys(ReportController::TYPES))
         ->name('reports.show');
+
+    // ── Administración ──────────────────────────────────────────────────────
+    // Mismos permisos que la web. Mi empresa y métodos de pago son de
+    // «settings» (sin plan, como en la web); las cajas, del módulo «caja».
+    Route::prefix('admin')->name('admin.')->group(function () {
+        Route::get('/company', [AdminController::class, 'company'])
+            ->middleware('check-permission:settings.view')->name('company');
+        Route::put('/company', [AdminController::class, 'updateCompany'])
+            ->middleware('check-permission:settings.edit')->name('company.update');
+
+        Route::get('/branches', [AdminController::class, 'branches'])
+            ->middleware('check-permission:branches.view')->name('branches');
+        Route::post('/branches', [AdminController::class, 'storeBranch'])
+            ->middleware('check-permission:branches.create')->name('branches.store');
+        Route::put('/branches/{branch}', [AdminController::class, 'updateBranch'])
+            ->middleware('check-permission:branches.edit')->name('branches.update');
+
+        Route::middleware('plan:caja')->group(function () {
+            Route::get('/cajas', [AdminController::class, 'cajas'])
+                ->middleware('check-permission:cajas.view')->name('cajas');
+            Route::get('/cajas/options', [AdminController::class, 'cajaOptions'])
+                ->middleware('check-permission:cajas.view')->name('cajas.options');
+            Route::post('/cajas', [AdminController::class, 'storeCaja'])
+                ->middleware('check-permission:cajas.create')->name('cajas.store');
+            Route::put('/cajas/{caja}', [AdminController::class, 'updateCaja'])
+                ->middleware('check-permission:cajas.edit')->name('cajas.update');
+        });
+
+        Route::get('/payment-methods', [AdminController::class, 'paymentMethods'])
+            ->middleware('check-permission:settings.view')->name('payment-methods');
+        Route::post('/payment-methods', [AdminController::class, 'storePaymentMethod'])
+            ->middleware('check-permission:settings.edit')->name('payment-methods.store');
+        Route::put('/payment-methods/{paymentMethod}', [AdminController::class, 'updatePaymentMethod'])
+            ->middleware('check-permission:settings.edit')->name('payment-methods.update');
+    });
 
     // ── Lo mío ──────────────────────────────────────────────────────────────
     // Sin check-permission: son los datos del propio usuario, y el controlador

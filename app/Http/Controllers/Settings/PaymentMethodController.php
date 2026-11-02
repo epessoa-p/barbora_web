@@ -4,8 +4,8 @@ namespace App\Http\Controllers\Settings;
 
 use App\Http\Controllers\Controller;
 use App\Models\PaymentMethod;
+use App\Support\PaymentMethodForm;
 use Illuminate\Http\Request;
-use Illuminate\Validation\ValidationException;
 
 /**
  * Métodos de pago de la barbería.
@@ -93,33 +93,9 @@ class PaymentMethodController extends Controller
      | Internos
      |--------------------------------------------------------------------- */
 
+    /** Las reglas viven en PaymentMethodForm: la API del móvil usa las mismas. */
     protected function validated(Request $request, ?PaymentMethod $method = null): array
     {
-        $data = $request->validate([
-            'name' => ['required', 'string', 'max:60'],
-            'counts_as_cash' => ['nullable', 'boolean'],
-            'requires_reference' => ['nullable', 'boolean'],
-            'active' => ['nullable', 'boolean'],
-        ], [
-            'name.required' => 'Ponle un nombre al método de pago.',
-        ]);
-
-        $countsAsCash = $request->boolean('counts_as_cash');
-
-        // Dejar la barbería sin ningún método en efectivo rompería el arqueo.
-        if ($method && $method->counts_as_cash && ! $countsAsCash
-            && PaymentMethod::cash()->count() === 1) {
-            throw ValidationException::withMessages([
-                'counts_as_cash' => 'Es el único método que cuenta como efectivo. '
-                    . 'Marca otro antes de quitarle esto.',
-            ]);
-        }
-
-        return [
-            'name' => trim($data['name']),
-            'counts_as_cash' => $countsAsCash,
-            'requires_reference' => $request->boolean('requires_reference'),
-            'active' => $request->boolean('active', true),
-        ];
+        return app(PaymentMethodForm::class)->validate($request, $method);
     }
 }

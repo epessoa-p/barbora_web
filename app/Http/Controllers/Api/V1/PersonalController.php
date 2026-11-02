@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Models\Branch;
 use App\Models\Cargo;
 use App\Models\Personal;
 use Illuminate\Http\JsonResponse;
@@ -20,7 +21,7 @@ class PersonalController extends ApiController
     /** Todo el personal de la barbería (activo e inactivo), para administrarlo. */
     public function index(): JsonResponse
     {
-        $personal = Personal::with('cargo')->orderBy('full_name')->get();
+        $personal = Personal::with(['cargo', 'branch'])->orderBy('full_name')->get();
 
         return $this->json(['data' => $personal->map($this->payload(...))->all()]);
     }
@@ -34,6 +35,8 @@ class PersonalController extends ApiController
         $personal = Personal::create([
             'company_id' => $companyId,
             'cargo_id' => $data['cargo_id'],
+            // Sin sucursal, Personal le pone la de la empresa por defecto.
+            'branch_id' => $data['branch_id'] ?? null,
             'full_name' => trim($data['full_name']),
             'id_number' => $data['id_number'] ?? null,
             'phone' => $data['phone'] ?? null,
@@ -43,7 +46,7 @@ class PersonalController extends ApiController
             'active' => $request->boolean('active', true),
         ]);
 
-        $personal->load('cargo');
+        $personal->load(['cargo', 'branch']);
 
         return $this->json([
             'message' => 'Barbero registrado.',
@@ -57,6 +60,8 @@ class PersonalController extends ApiController
 
         $personal->update([
             'cargo_id' => $data['cargo_id'],
+            // Una app vieja no la manda: entonces se conserva la que tenía.
+            'branch_id' => array_key_exists('branch_id', $data) ? $data['branch_id'] : $personal->branch_id,
             'full_name' => trim($data['full_name']),
             'id_number' => $data['id_number'] ?? null,
             'phone' => $data['phone'] ?? null,
@@ -66,7 +71,7 @@ class PersonalController extends ApiController
             'active' => $request->boolean('active', (bool) $personal->active),
         ]);
 
-        $personal->load('cargo');
+        $personal->load(['cargo', 'branch']);
 
         return $this->json([
             'message' => 'Barbero actualizado.',
@@ -84,12 +89,28 @@ class PersonalController extends ApiController
         ])->all()]);
     }
 
+    /** Cargos y sucursales activos, para los selectores del formulario. */
+    public function options(): JsonResponse
+    {
+        return $this->json([
+            'cargos' => Cargo::where('active', true)->orderBy('name')->get(['id', 'name'])
+                ->map(fn (Cargo $c) => ['id' => $c->id, 'name' => $c->name])->all(),
+            'branches' => AdminController::branchOptions(),
+        ]);
+    }
+
     /* ── Internos ─────────────────────────────────────────────────────────── */
 
     protected function validateData(Request $request, int $companyId): array
     {
         return $request->validate([
             'cargo_id' => ['required', Rule::exists('cargos', 'id')->where('company_id', $companyId)],
+            // La sucursal base: obligatoria en cuanto la empresa tiene alguna.
+            'branch_id' => [
+                'sometimes',
+                Branch::forCompany($companyId)->exists() ? 'required' : 'nullable',
+                Rule::exists('branches', 'id')->where('company_id', $companyId)->whereNull('deleted_at'),
+            ],
             'full_name' => ['required', 'string', 'max:255'],
             'id_number' => ['nullable', 'string', 'max:50'],
             'phone' => ['nullable', 'string', 'max:30'],
@@ -100,6 +121,7 @@ class PersonalController extends ApiController
         ], [
             'cargo_id.required' => 'Elige el cargo del barbero.',
             'full_name.required' => 'El nombre es obligatorio.',
+            'branch_id.required' => 'Elige la sucursal donde trabaja.',
         ]);
     }
 
@@ -110,6 +132,8 @@ class PersonalController extends ApiController
             'full_name' => $personal->full_name,
             'cargo_id' => $personal->cargo_id,
             'cargo' => $personal->cargo?->name,
+            'branch_id' => $personal->branch_id,
+            'branch' => $personal->branch?->name,
             'phone' => $personal->phone,
             'specialty' => $personal->specialty,
             'agenda_color' => $personal->agenda_color,
