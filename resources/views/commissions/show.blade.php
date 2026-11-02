@@ -128,18 +128,17 @@
                         <textarea name="notes" rows="2" class="form-control form-control-sm mb-2"
                                   placeholder="Notas de la liquidación"></textarea>
 
-                        @if(! $hasOpenCash)
-                            <div class="alert alert-warning py-2 small">
-                                <i class="bi bi-exclamation-triangle"></i>
-                                No hay turno de caja abierto. Ábrelo antes de pagar.
+                        @if($sources !== [])
+                            <div class="mb-3">
+                                @include('finance.partials.payment-source', ['title' => '¿De dónde sale el pago?'])
                             </div>
                         @endif
 
-                        <button class="btn btn-primary w-100" {{ $hasOpenCash ? '' : 'disabled' }}>
+                        <button class="btn btn-primary w-100">
                             <i class="bi bi-cash-coin"></i> Liquidar y pagar
                         </button>
                         <p class="text-muted small mb-0 mt-2">
-                            El pago sale del turno de caja abierto y queda registrado como egreso.
+                            El pago queda registrado como gasto en «COMISIONES», a nombre de {{ $personal->full_name }}.
                         </p>
                     </form>
                 @endif

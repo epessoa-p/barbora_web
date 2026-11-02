@@ -420,6 +420,60 @@ class CommissionTest extends TestCase
         $this->assertSame($session->id, $egreso->cash_session_id);
     }
 
+    public function test_la_liquidacion_se_paga_desde_una_cuenta_y_queda_como_gasto(): void
+    {
+        $company = $this->companyWithPlan(planAttributes: [
+            'features' => ['pos', 'caja', 'inventario', 'agenda', 'comisiones', 'finanzas', 'estadisticas'],
+        ]);
+        $this->warehouse($company);
+        $session = $this->openCash($company);
+        $barber = $this->barber($company);
+        $service = Service::factory()->create(['company_id' => $company->id, 'price' => 100]);
+        $this->rule($company, ['value' => 40]);
+        $this->sell($company, $barber, [['type' => 'servicio', 'id' => $service->id, 'price' => 100]]);
+
+        $account = \App\Models\FinanceAccount::withoutGlobalScopes()->create([
+            'company_id' => $company->id, 'name' => 'BANCO', 'type' => 'banco', 'balance' => 500, 'active' => true,
+        ]);
+        $user = $this->userInCompany($company, ['commissions.view', 'commissions.create', 'expenses.view']);
+
+        // La pantalla ofrece pagar desde una cuenta o desde la caja.
+        $this->actingInCompany($user, $company)->get(route('commissions.show', $barber))
+            ->assertOk()->assertSee('¿De dónde sale el pago?');
+
+        $this->actingInCompany($user, $company)
+            ->post(route('commissions.settle', $barber), [
+                'period_start' => now()->subDay()->toDateString(),
+                'period_end' => now()->addDay()->toDateString(),
+                'source' => 'account',
+                'finance_account_id' => $account->id,
+            ])->assertRedirect();
+
+        $settlement = CommissionSettlement::allCompanies()->firstOrFail();
+        $expense = \App\Models\Expense::withoutGlobalScopes()->where('commission_settlement_id', $settlement->id)->firstOrFail();
+
+        $this->assertSame('COMISIONES', $expense->category->name);
+        $this->assertSame($barber->id, $expense->personal_id);
+        $this->assertSame('40.00', $expense->amount);
+        $this->assertSame('460.00', $account->refresh()->balance);
+        // No salió nada de la caja.
+        $this->assertSame(0, CashMovement::allCompanies()->where('type', 'egreso')->count());
+
+        // No se anula suelto: es el pago de la liquidación.
+        $admin = $this->userInCompany($company, ['expenses.view', 'expenses.delete'], 'anula');
+        $this->actingInCompany($admin, $company)->patch(route('expenses.cancel', $expense))->assertSessionHasErrors('error');
+
+        $this->actingInCompany($user, $company)->get(route('commissions.settlements.show', $settlement))
+            ->assertOk()->assertSee($expense->number);
+
+        // En Ganancias la comisión resta una sola vez (como comisión), no también como gasto.
+        $earnings = $this->inCompany($company, fn () => app(\App\Support\Reports\EarningsReport::class)->for(
+            new \App\Support\ReportPeriod(now()->toImmutable()->startOfDay(), now()->toImmutable()->endOfDay()),
+        ));
+        $this->assertSame(40.0, $earnings['commissions']);
+        $this->assertSame(0.0, $earnings['other_expenses']);
+    }
+
     public function test_una_comision_no_se_liquida_dos_veces(): void
     {
         $company = $this->company();

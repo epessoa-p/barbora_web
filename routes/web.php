@@ -46,6 +46,8 @@ Route::middleware('auth')->group(function () {
         'sales',         // módulo de plan «pos»: ventas y comprobantes
         'commissions',   // módulo de plan «comisiones»: reglas y liquidaciones
         'inventory',     // módulo de plan «inventario»: almacenes
+        'purchases',     // módulo de plan «inventario»: compras y proveedores
+        'finance',       // módulo de plan «finanzas»: cuentas y gastos
         'cash',          // módulo de plan «caja»: cajas
         'reports',       // módulo de plan «estadisticas»: reportes del negocio
         'settings',      // administrativo: cómo cobra y cómo se identifica la barbería

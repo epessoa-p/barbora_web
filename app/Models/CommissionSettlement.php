@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * Comprobante de lo que se le pagó a un barbero por un periodo.
@@ -49,6 +50,12 @@ class CommissionSettlement extends Model
     public function cashSession(): BelongsTo
     {
         return $this->belongsTo(CashSession::class);
+    }
+
+    /** El gasto con el que se pagó (de una cuenta o de la caja). */
+    public function expense(): HasOne
+    {
+        return $this->hasOne(Expense::class, 'commission_settlement_id');
     }
 
     public function periodLabel(): string

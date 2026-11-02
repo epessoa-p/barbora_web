@@ -45,6 +45,12 @@ class RolePermissionSeeder extends Seeder
                 'dashboard.view',
                 'settings.view', 'settings.edit',
                 'subscriptions.view',
+                'accounts.view', 'accounts.create', 'accounts.edit', 'accounts.delete',
+                'account_movements.create', 'account_movements.delete',
+                'expenses.view', 'expenses.create', 'expenses.delete',
+                'expense_categories.view', 'expense_categories.create', 'expense_categories.edit', 'expense_categories.delete',
+                'suppliers.view', 'suppliers.create', 'suppliers.edit', 'suppliers.delete',
+                'purchases.view', 'purchases.create', 'purchases.edit', 'purchases.delete',
             ],
             'manager' => [
                 'users.view',
@@ -73,6 +79,11 @@ class RolePermissionSeeder extends Seeder
                 'dashboard.view',
                 // Consulta cómo está configurado, pero no lo cambia.
                 'settings.view',
+                // Registra gastos y compras del día; no anula ni administra cuentas.
+                'accounts.view', 'account_movements.create',
+                'expenses.view', 'expenses.create', 'expense_categories.view',
+                'suppliers.view', 'suppliers.create', 'suppliers.edit',
+                'purchases.view', 'purchases.create', 'purchases.edit',
             ],
             'cashier' => [
                 'branches.view',

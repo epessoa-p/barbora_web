@@ -218,7 +218,7 @@ class ReportController extends ApiController
                 $this->stat('Ingresos', $r['revenue'], 'money'),
                 $this->stat('Costo productos', $r['product_cost'], 'money'),
                 $this->stat('Comisiones', $r['commissions'], 'money'),
-                $this->stat('Otros gastos', $r['other_expenses'], 'money'),
+                $this->stat('Gastos', $r['other_expenses'], 'money'),
                 $this->stat('Bruto', $r['gross'], 'money'),
                 $this->stat('Neto', $r['net'], 'money'),
                 $this->stat('Margen', $r['margin_pct'], 'percent'),
@@ -232,7 +232,12 @@ class ReportController extends ApiController
                     ['Ingresos', 'Costo', 'Comisiones', 'Otros', 'Neto'],
                     [$r['revenue'], $r['product_cost'], $r['commissions'], $r['other_expenses'], $r['net']]),
             ],
-            'tables' => [],
+            'tables' => [
+                $this->table('Gastos por categoría',
+                    [$this->col('Categoría'), $this->col('Gastos', 'int', 'end'), $this->col('Total', 'money', 'end')],
+                    collect($r['expenses_by_category'])->map(fn ($x) => [$x['category'], $x['count'], $x['total']])
+                        ->when($r['loose_cash_expenses'] > 0, fn ($rows) => $rows->push(['Egresos sueltos de caja', null, $r['loose_cash_expenses']]))),
+            ],
         ];
     }
 

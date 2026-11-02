@@ -25,7 +25,7 @@ class SettlementController extends Controller
 
     public function show(CommissionSettlement $settlement)
     {
-        $settlement->load(['personal', 'paidBy', 'cashSession.caja', 'entries.sale', 'entries.item']);
+        $settlement->load(['personal', 'paidBy', 'cashSession.caja', 'entries.sale', 'entries.item', 'expense.account', 'expense.cashSession']);
 
         return view('commissions.settlements.show', compact('settlement'));
     }

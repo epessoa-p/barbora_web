@@ -3,7 +3,11 @@
 namespace App\Http\Controllers\Commissions;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Finance\ExpenseController;
 use App\Models\CashSession;
+use App\Models\ExpenseCategory;
+use App\Support\ExpenseRegistrar;
+use App\Support\PaymentSource;
 use App\Models\CommissionEntry;
 use App\Models\CommissionSettlement;
 use App\Models\Personal;
@@ -16,6 +20,10 @@ use Illuminate\Validation\ValidationException;
 
 class CommissionController extends Controller
 {
+    public function __construct(protected ExpenseRegistrar $expenses)
+    {
+    }
+
     /** Qué debe la barbería a cada barbero en el periodo. */
     public function index(Request $request)
     {
@@ -86,7 +94,8 @@ class CommissionController extends Controller
             'entries' => $entries,
             'pending' => $entries->whereNull('commission_settlement_id'),
             'tips' => $tips,
-            'hasOpenCash' => CashSession::open()->exists(),
+            // De dónde sale el pago: una cuenta o la caja abierta, como un gasto.
+            ...ExpenseController::sourceOptions($request->attributes->get('tenant_company')),
         ]);
     }
 
@@ -126,15 +135,9 @@ class CommissionController extends Controller
         }
 
         $company = $personal->company;
-        $session = $company->planAllows('caja') ? CashSession::open()->orderBy('opened_at')->first() : null;
+        $source = $this->paymentSource($request, $company);
 
-        if ($company->planAllows('caja') && ! $session) {
-            throw ValidationException::withMessages([
-                'error' => 'No hay ningún turno de caja abierto. Ábrelo antes de pagar la liquidación.',
-            ]);
-        }
-
-        $settlement = DB::transaction(function () use ($personal, $company, $pending, $commissions, $tips, $from, $to, $data, $session) {
+        $settlement = DB::transaction(function () use ($personal, $company, $pending, $commissions, $tips, $from, $to, $data, $source) {
             $total = round($commissions + $tips, 2);
 
             $settlement = CommissionSettlement::create([
@@ -149,23 +152,28 @@ class CommissionController extends Controller
                 'total' => $total,
                 'paid_at' => now(),
                 'paid_by' => auth()->id(),
-                'cash_session_id' => $session?->id,
                 'notes' => $data['notes'] ?? null,
             ]);
 
             CommissionEntry::whereIn('id', $pending->pluck('id'))
                 ->update(['commission_settlement_id' => $settlement->id]);
 
-            // Pagar al barbero es dinero que sale del cajón.
-            $session?->movements()->create([
-                'company_id' => $company->id,
-                'type' => 'egreso',
-                'payment_method' => 'efectivo',
-                'concept' => "Liquidación {$settlement->number} · {$personal->full_name}",
-                'amount' => $total,
-                'reference' => $settlement->number,
-                'created_by' => auth()->id(),
-            ]);
+            // El pago se registra como gasto («COMISIONES»), a nombre del
+            // barbero, y sale de la cuenta o la caja elegida. Sin cuentas ni
+            // caja en el plan, no hay de dónde sacarlo: queda solo la liquidación.
+            if ($source) {
+                $expense = $this->expenses->record($company, ExpenseCategory::system($company->id, ExpenseCategory::COMMISSIONS, 'personal'), $source, [
+                    'branch_id' => $personal->branch_id ?? $source[2]?->branch_id ?? $source[1]?->branch_id,
+                    'personal_id' => $personal->id,
+                    'commission_settlement_id' => $settlement->id,
+                    'description' => "Liquidación {$settlement->number} · {$personal->full_name}",
+                    'amount' => $total,
+                    'spent_on' => now()->toDateString(),
+                    'reference' => $settlement->number,
+                ], auth()->id());
+
+                $settlement->update(['cash_session_id' => $expense->cash_session_id]);
+            }
 
             return $settlement;
         });
@@ -173,6 +181,34 @@ class CommissionController extends Controller
         return redirect()->route('commissions.settlements.show', $settlement)
             ->with('success', "Liquidación {$settlement->number} pagada: "
                 . \App\Support\Money::format($settlement->total, $company).'.');
+    }
+
+    /**
+     * De dónde sale el pago de la liquidación. Si el formulario lo dice (cuenta
+     * o caja), eso; si no (una pantalla vieja), el primer turno de caja
+     * abierto, como antes. Sin cuentas ni caja en el plan: de ninguna parte.
+     *
+     * @return array{0: string, 1: mixed, 2: mixed}|null
+     */
+    protected function paymentSource(Request $request, $company): ?array
+    {
+        if ($request->filled('source')) {
+            return app(PaymentSource::class)->validate($request, $company);
+        }
+
+        if (! $company->planAllows('caja')) {
+            return null;
+        }
+
+        $session = CashSession::open()->orderBy('opened_at')->first();
+
+        if (! $session) {
+            throw ValidationException::withMessages([
+                'error' => 'No hay ningún turno de caja abierto. Ábrelo antes de pagar la liquidación.',
+            ]);
+        }
+
+        return ['cash', null, $session];
     }
 
     /**

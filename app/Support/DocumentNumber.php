@@ -20,6 +20,8 @@ class DocumentNumber
         'C' => 'Cita',
         'T' => 'Turno de caja',
         'I' => 'Movimiento de inventario',
+        'G' => 'Gasto',
+        'P' => 'Compra',
     ];
 
     /**

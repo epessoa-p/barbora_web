@@ -8,9 +8,11 @@ use App\Http\Controllers\Api\V1\BookingController;
 use App\Http\Controllers\Api\V1\CashController;
 use App\Http\Controllers\Api\V1\CatalogController;
 use App\Http\Controllers\Api\V1\DashboardController;
+use App\Http\Controllers\Api\V1\FinanceController;
 use App\Http\Controllers\Api\V1\InventoryController;
 use App\Http\Controllers\Api\V1\MyController;
 use App\Http\Controllers\Api\V1\PersonalController;
+use App\Http\Controllers\Api\V1\PurchaseController;
 use App\Http\Controllers\Api\V1\ReminderController;
 use App\Http\Controllers\Api\V1\ReportController;
 use App\Http\Controllers\Api\V1\SaleController;
@@ -282,6 +284,67 @@ Route::middleware('auth:sanctum')->group(function () {
             ->middleware('check-permission:settings.edit')->name('payment-methods.store');
         Route::put('/payment-methods/{paymentMethod}', [AdminController::class, 'updatePaymentMethod'])
             ->middleware('check-permission:settings.edit')->name('payment-methods.update');
+    });
+
+    // ── Finanzas (módulo de plan «finanzas») ────────────────────────────────
+    // Cuentas, sus movimientos, gastos y categorías. Mismas reglas que la web.
+    Route::middleware('plan:finanzas')->prefix('finance')->name('finance.')->group(function () {
+        Route::get('/options', [FinanceController::class, 'options'])
+            ->middleware('check-permission:expenses.create')->name('options');
+
+        Route::get('/accounts', [FinanceController::class, 'accounts'])
+            ->middleware('check-permission:accounts.view')->name('accounts');
+        Route::post('/accounts', [FinanceController::class, 'storeAccount'])
+            ->middleware('check-permission:accounts.create')->name('accounts.store');
+        Route::put('/accounts/{account}', [FinanceController::class, 'updateAccount'])
+            ->middleware('check-permission:accounts.edit')->name('accounts.update');
+        Route::get('/accounts/{account}/movements', [FinanceController::class, 'movements'])
+            ->middleware('check-permission:accounts.view')->name('accounts.movements');
+        Route::post('/accounts/{account}/movements', [FinanceController::class, 'storeMovement'])
+            ->middleware('check-permission:account_movements.create')->name('accounts.movements.store');
+        Route::post('/accounts/{account}/transfer', [FinanceController::class, 'transfer'])
+            ->middleware('check-permission:account_movements.create')->name('accounts.transfer');
+        Route::patch('/movements/{movement}/cancel', [FinanceController::class, 'cancelMovement'])
+            ->middleware('check-permission:account_movements.delete')->name('movements.cancel');
+
+        Route::get('/expenses', [FinanceController::class, 'expenses'])
+            ->middleware('check-permission:expenses.view')->name('expenses');
+        Route::post('/expenses', [FinanceController::class, 'storeExpense'])
+            ->middleware('check-permission:expenses.create')->name('expenses.store');
+        Route::patch('/expenses/{expense}/cancel', [FinanceController::class, 'cancelExpense'])
+            ->middleware('check-permission:expenses.delete')->name('expenses.cancel');
+
+        Route::get('/expense-categories', [FinanceController::class, 'categories'])
+            ->middleware('check-permission:expense_categories.view')->name('categories');
+        Route::post('/expense-categories', [FinanceController::class, 'storeCategory'])
+            ->middleware('check-permission:expense_categories.create')->name('categories.store');
+        Route::put('/expense-categories/{expenseCategory}', [FinanceController::class, 'updateCategory'])
+            ->middleware('check-permission:expense_categories.edit')->name('categories.update');
+    });
+
+    // ── Compras (módulo de plan «inventario») y proveedores ─────────────────
+    Route::middleware('plan:inventario')->prefix('purchases')->name('purchases.')->group(function () {
+        Route::get('/', [PurchaseController::class, 'index'])
+            ->middleware('check-permission:purchases.view')->name('index');
+        Route::get('/options', [PurchaseController::class, 'options'])
+            ->middleware('check-permission:purchases.create')->name('options');
+        Route::post('/', [PurchaseController::class, 'store'])
+            ->middleware('check-permission:purchases.create')->name('store');
+        Route::get('/{purchase}', [PurchaseController::class, 'show'])
+            ->middleware('check-permission:purchases.view')->name('show');
+        Route::post('/{purchase}/payments', [PurchaseController::class, 'pay'])
+            ->middleware('check-permission:purchases.edit')->name('pay');
+        Route::patch('/{purchase}/cancel', [PurchaseController::class, 'cancel'])
+            ->middleware('check-permission:purchases.delete')->name('cancel');
+    });
+
+    Route::middleware('plan:inventario,finanzas')->prefix('suppliers')->name('suppliers.')->group(function () {
+        Route::get('/', [PurchaseController::class, 'suppliers'])
+            ->middleware('check-permission:suppliers.view')->name('index');
+        Route::post('/', [PurchaseController::class, 'storeSupplier'])
+            ->middleware('check-permission:suppliers.create')->name('store');
+        Route::put('/{supplier}', [PurchaseController::class, 'updateSupplier'])
+            ->middleware('check-permission:suppliers.edit')->name('update');
     });
 
     // ── Lo mío ──────────────────────────────────────────────────────────────

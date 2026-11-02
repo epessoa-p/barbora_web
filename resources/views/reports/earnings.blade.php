@@ -55,9 +55,22 @@
                     <span class="text-danger">{{ \App\Support\Money::format(-$earnings['commissions'], $tenantCompany) }}</span>
                 </div>
                 <div class="d-flex justify-content-between py-1 border-bottom">
-                    <span class="text-muted">Otros egresos de caja</span>
+                    <span class="text-muted">Gastos</span>
                     <span class="text-danger">{{ \App\Support\Money::format(-$earnings['other_expenses'], $tenantCompany) }}</span>
                 </div>
+                {{-- El detalle de los gastos: por categoría, y lo que salió suelto de la caja. --}}
+                @foreach($earnings['expenses_by_category'] as $row)
+                    <div class="d-flex justify-content-between py-1 ps-3 small border-bottom">
+                        <span class="text-muted">{{ $row['category'] }} <span class="opacity-75">({{ $row['count'] }})</span></span>
+                        <span class="text-muted">{{ \App\Support\Money::format(-$row['total'], $tenantCompany) }}</span>
+                    </div>
+                @endforeach
+                @if($earnings['loose_cash_expenses'] > 0)
+                    <div class="d-flex justify-content-between py-1 ps-3 small border-bottom">
+                        <span class="text-muted">Egresos sueltos de caja</span>
+                        <span class="text-muted">{{ \App\Support\Money::format(-$earnings['loose_cash_expenses'], $tenantCompany) }}</span>
+                    </div>
+                @endif
 
                 <div class="d-flex justify-content-between py-3 fs-5 fw-bold">
                     <span>Resultado</span>

@@ -30,6 +30,7 @@ class Plan extends Model
         'clientes'        => 'Clientes / Fidelización',
         'estadisticas'    => 'Estadísticas / Reportes',
         'reservas_online' => 'Reservas online',
+        'finanzas'        => 'Finanzas (cuentas y gastos)',
     ];
 
     /**
@@ -62,6 +63,15 @@ class Plan extends Model
         'cajas' => 'caja',
         'cash' => 'caja',
         'reports' => 'estadisticas',
+        // Finanzas: cuentas, sus movimientos y los gastos.
+        'accounts' => 'finanzas',
+        'account_movements' => 'finanzas',
+        'expenses' => 'finanzas',
+        'expense_categories' => 'finanzas',
+        // Compras mete mercadería al almacén: va con Inventario. Los
+        // proveedores sirven a las dos (gastos y compras).
+        'purchases' => 'inventario',
+        'suppliers' => ['finanzas', 'inventario'],
     ];
 
     protected $fillable = [

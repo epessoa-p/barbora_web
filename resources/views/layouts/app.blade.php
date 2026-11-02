@@ -118,6 +118,27 @@
             ],
         ],
         [
+            // Compras mete mercadería al almacén: va con Inventario.
+            'key' => 'compras',
+            'label' => 'Compras',
+            'color' => '#0d9488',
+            'items' => [
+                ['show' => $can('purchases.view') && $hasModule('inventario'), 'route' => 'purchases.index', 'pattern' => 'purchases.*', 'icon' => 'bi-bag-check', 'label' => 'Compras'],
+                ['show' => $can('suppliers.view') && ($hasModule('inventario') || $hasModule('finanzas')), 'route' => 'suppliers.index', 'pattern' => 'suppliers.*', 'icon' => 'bi-truck', 'label' => 'Proveedores'],
+            ],
+        ],
+        [
+            // Finanzas: el dinero fuera del cajón (cuentas) y los gastos.
+            'key' => 'finanzas',
+            'label' => 'Finanzas',
+            'color' => '#16a34a',
+            'items' => [
+                ['show' => $can('accounts.view') && $hasModule('finanzas'), 'route' => 'accounts.index', 'pattern' => 'accounts.*', 'icon' => 'bi-bank', 'label' => 'Cuentas'],
+                ['show' => $can('expenses.view') && $hasModule('finanzas'), 'route' => 'expenses.index', 'pattern' => 'expenses.*', 'icon' => 'bi-receipt-cutoff', 'label' => 'Gastos'],
+                ['show' => $can('expense_categories.view') && $hasModule('finanzas'), 'route' => 'expense-categories.index', 'pattern' => 'expense-categories.*', 'icon' => 'bi-tags', 'label' => 'Categorías de gasto'],
+            ],
+        ],
+        [
             'key' => 'caja',
             'label' => 'Caja',
             'color' => '#ca8a04',

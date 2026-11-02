@@ -93,6 +93,17 @@
                         </a>
                     </p>
                 @endif
+                @if($settlement->expense)
+                    <p class="mb-1">
+                        <strong>Salió de:</strong> {{ $settlement->expense->sourceLabel() }}
+                        · gasto
+                        @if(auth()->user()->hasPermissionInCompany('expenses.view', $tenantCompany) && $tenantCompany?->planAllows('finanzas'))
+                            <a href="{{ route('expenses.show', $settlement->expense) }}"><code>{{ $settlement->expense->number }}</code></a>
+                        @else
+                            <code>{{ $settlement->expense->number }}</code>
+                        @endif
+                    </p>
+                @endif
                 @if($settlement->notes)
                     <p class="mb-0"><strong>Notas:</strong> {{ $settlement->notes }}</p>
                 @endif

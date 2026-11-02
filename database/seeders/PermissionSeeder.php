@@ -45,6 +45,14 @@ class PermissionSeeder extends Seeder
             // La pantalla de Inicio de la app (resumen del día). Quien no lo tiene
             // entra directo a la Agenda.
             'dashboard' => ['label' => 'Inicio', 'article' => 'el resumen del día (pantalla de inicio de la app)', 'actions' => ['view']],
+            // Finanzas: cuentas (capital, caja chica, banco), sus movimientos y los gastos.
+            'accounts' => ['label' => 'Cuentas', 'article' => 'las cuentas (capital, caja chica, banco) y sus movimientos'],
+            'account_movements' => ['label' => 'Movimientos de cuenta', 'article' => 'ingresos, egresos y transferencias entre cuentas', 'actions' => ['create', 'delete']],
+            'expenses' => ['label' => 'Gastos', 'article' => 'los gastos', 'actions' => ['view', 'create', 'delete']],
+            'expense_categories' => ['label' => 'Categorías de gasto', 'article' => 'las categorías de gasto'],
+            // Compras: proveedores y compras de mercadería (edit = pagar la deuda).
+            'suppliers' => ['label' => 'Proveedores', 'article' => 'los proveedores'],
+            'purchases' => ['label' => 'Compras', 'article' => 'las compras y sus pagos'],
         ];
 
         $verbs = [
