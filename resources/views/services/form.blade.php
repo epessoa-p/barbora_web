@@ -1,6 +1,6 @@
 <div class="card mt-4">
     <div class="card-body">
-        <form action="{{ $service ? route('services.update', $service) : route('services.store') }}" method="POST">
+        <form action="{{ $service ? route('services.update', $service) : route('services.store') }}" method="POST" enctype="multipart/form-data">
             @csrf
             @if($service)
                 @method('PUT')
@@ -42,6 +42,12 @@
                            placeholder="Qué incluye, para que el cliente sepa qué esperar">
                     @error('description')<div class="invalid-feedback">{{ $message }}</div>@enderror
                 </div>
+
+                {{-- La foto sale en la lista de servicios y en el catálogo público. --}}
+                @include('partials.photo-input', [
+                    'model' => $service,
+                    'help' => 'JPG, PNG o WEBP, hasta 2 MB. Se muestra en el catálogo público.',
+                ])
 
                 <div class="col-md-4">
                     <label for="duration_minutes" class="form-label">Duración</label>

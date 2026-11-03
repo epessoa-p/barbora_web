@@ -339,8 +339,10 @@ class SaleTest extends TestCase
             'branch_id' => $sur->id, 'active' => true,
         ]);
 
+        // Con dos sucursales en la empresa pero solo SUR asignada: sin selector, va SUR.
         $html = $this->actingInCompany($user, $company)->get(route('sales.create'))->getContent();
-        $this->assertMatchesRegularExpression('/<option value="'.$sur->id.'"\s+selected>/', $html);
+        $this->assertStringNotContainsString('<select id="branch_id"', $html);
+        $this->assertMatchesRegularExpression('/name="branch_id" id="branch_id"\s+value="'.$sur->id.'"/', $html);
     }
 
     public function test_sin_sucursal_la_venta_va_a_la_del_usuario_si_tiene_caja_abierta(): void

@@ -194,7 +194,8 @@
 
     // La sucursal sigue al barbero: la cita va donde él atiende.
     const barber = document.getElementById('personal_id');
-    const branch = document.querySelector('select#branch_id');
+    // Selector visible o, con una sola sucursal, el campo oculto.
+    const branch = document.getElementById('branch_id');
     barber?.addEventListener('change', function () {
         const branchId = barber.selectedOptions[0]?.dataset.branch;
         if (branch && branchId) branch.value = branchId;

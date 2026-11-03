@@ -18,6 +18,7 @@ class ServiceResource extends JsonResource
             'category_id' => $this->service_category_id,
             'category' => $this->whenLoaded('category', fn () => $this->category?->name),
             'active' => (bool) $this->active,
+            'photo_url' => $this->photoUrl(),
         ];
     }
 }

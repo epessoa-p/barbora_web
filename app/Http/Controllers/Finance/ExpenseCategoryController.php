@@ -69,6 +69,8 @@ class ExpenseCategoryController extends Controller
         ]);
 
         $data['name'] = trim($data['name']);
+        // Servicio básico / recurrente (alquiler, luz, agua…): una casilla.
+        $data['recurring'] = $request->boolean('recurring');
 
         return $data;
     }

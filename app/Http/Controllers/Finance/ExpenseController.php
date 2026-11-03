@@ -64,7 +64,7 @@ class ExpenseController extends Controller
             'categories' => ExpenseCategory::active()->ordered()->get(),
             'suppliers' => Supplier::active()->orderBy('name')->get(),
             'staff' => Personal::where('active', true)->orderBy('full_name')->get(),
-            'branches' => Branch::where('active', true)->orderBy('name')->get(),
+            'branches' => Branch::workableFor(auth()->user(), $company->id),
             ...$this->sourceOptions($company),
         ]);
     }
@@ -107,7 +107,7 @@ class ExpenseController extends Controller
         return [
             'sources' => $sources,
             'accounts' => in_array('account', $sources, true) ? FinanceAccount::active()->orderBy('name')->get() : collect(),
-            'openSessions' => in_array('cash', $sources, true) ? PaymentSource::openSessions($company->id) : collect(),
+            'openSessions' => in_array('cash', $sources, true) ? PaymentSource::openSessions($company->id, auth()->user()) : collect(),
             'preferredBranchId' => Branch::preferredIdFor(auth()->user(), $company->id),
         ];
     }

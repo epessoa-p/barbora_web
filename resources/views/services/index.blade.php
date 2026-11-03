@@ -59,10 +59,17 @@
                     @forelse($services as $service)
                         <tr>
                             <td class="ps-3">
-                                <div class="fw-semibold">{{ $service->name }}</div>
-                                @if($service->description)
-                                    <small class="text-muted">{{ $service->description }}</small>
-                                @endif
+                                <div class="d-flex align-items-center gap-2">
+                                    @if($service->photoUrl())
+                                        <img src="{{ $service->photoUrl() }}" alt="" class="rounded" style="width: 40px; height: 40px; object-fit: cover">
+                                    @endif
+                                    <div>
+                                        <div class="fw-semibold">{{ $service->name }}</div>
+                                        @if($service->description)
+                                            <small class="text-muted">{{ $service->description }}</small>
+                                        @endif
+                                    </div>
+                                </div>
                             </td>
                             <td>
                                 @if($service->category)

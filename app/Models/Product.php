@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToCompany;
+use App\Models\Concerns\HasPhoto;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -12,7 +13,10 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Product extends Model
 {
-    use HasFactory, SoftDeletes, BelongsToCompany;
+    use HasFactory, SoftDeletes, BelongsToCompany, HasPhoto;
+
+    /** Carpeta de las fotos (HasPhoto): products/{company_id}/… */
+    public const PHOTO_FOLDER = 'products';
 
     /** Unidades de medida habituales en una barbería. */
     public const UNITS = [
@@ -24,7 +28,7 @@ class Product extends Model
     ];
 
     protected $fillable = [
-        'company_id', 'product_category_id', 'name', 'sku', 'description', 'unit',
+        'company_id', 'product_category_id', 'name', 'sku', 'description', 'photo', 'unit',
         'cost_price', 'sale_price', 'is_sellable', 'track_stock', 'min_stock', 'active',
     ];
 

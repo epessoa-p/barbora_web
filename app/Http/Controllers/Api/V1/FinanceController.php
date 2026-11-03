@@ -43,7 +43,9 @@ class FinanceController extends ApiController
         ExpenseCategory::ensureDefaults($company->id);
 
         return $this->json([
-            'categories' => ExpenseCategory::active()->ordered()->get()->map($this->categoryPayload(...))->all(),
+            // Desde una pestaña de Gastos (proveedor, personal, básicos), solo las de ese grupo.
+            'categories' => ExpenseCategory::active()->inGroup($request->query('group'))->ordered()->get()
+                ->map($this->categoryPayload(...))->all(),
             'suppliers' => Supplier::active()->orderBy('name')->get()->map(fn (Supplier $s) => ['id' => $s->id, 'name' => $s->name])->all(),
             'staff' => Personal::where('active', true)->orderBy('full_name')->get()->map(fn (Personal $p) => ['id' => $p->id, 'name' => $p->full_name])->all(),
             ...self::sourcePayload($company),
@@ -58,7 +60,7 @@ class FinanceController extends ApiController
     {
         $sources = PaymentSource::available($company);
         $preferred = Branch::preferredIdFor(auth()->user(), $company->id);
-        $sessions = in_array('cash', $sources, true) ? PaymentSource::openSessions($company->id) : collect();
+        $sessions = in_array('cash', $sources, true) ? PaymentSource::openSessions($company->id, auth()->user()) : collect();
 
         return [
             'sources' => $sources,
@@ -217,6 +219,10 @@ class FinanceController extends ApiController
         if ($to = $request->query('to')) {
             $query->whereDate('spent_on', '<=', $to);
         }
+        // Las pestañas de la app: a proveedores, a personal, servicios básicos.
+        if (in_array($group = $request->query('group'), ExpenseCategory::GROUPS, true)) {
+            $query->whereHas('category', fn ($q) => $q->inGroup($group));
+        }
         if ($category = $request->integer('category')) {
             $query->where('expense_category_id', $category);
         }
@@ -319,6 +325,8 @@ class FinanceController extends ApiController
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255', Rule::unique('expense_categories', 'name')->where('company_id', $companyId)->ignore($category?->id)],
             'payee' => ['required', Rule::in(array_keys(ExpenseCategory::PAYEES))],
+            // Servicio básico / recurrente: alquiler, luz, agua…
+            'recurring' => ['sometimes', 'boolean'],
             'active' => ['sometimes', 'boolean'],
         ], [
             'name.required' => 'Ponle un nombre a la categoría.',
@@ -327,6 +335,10 @@ class FinanceController extends ApiController
 
         unset($data['active']);
         $data['name'] = trim($data['name']);
+
+        if ($request->has('recurring') || ! $category) {
+            $data['recurring'] = $request->boolean('recurring');
+        }
 
         return $data;
     }
@@ -354,6 +366,7 @@ class FinanceController extends ApiController
             'id' => $category->id,
             'name' => $category->name,
             'payee' => $category->payee,
+            'recurring' => (bool) $category->recurring,
             'active' => (bool) $category->active,
             'expenses_count' => (int) ($category->expenses_count ?? 0),
         ];

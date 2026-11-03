@@ -6,6 +6,9 @@
 <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
     <div>
         <h1 class="h4 fw-bold mb-1">
+            @if($product->photoUrl())
+                <img src="{{ $product->photoUrl() }}" alt="" class="rounded me-2 align-middle" style="width: 48px; height: 48px; object-fit: cover">
+            @endif
             {{ $product->name }}
             @unless($product->active) <span class="badge bg-secondary align-middle">Inactivo</span> @endunless
             @unless($product->is_sellable) <span class="badge bg-light text-dark border align-middle">Insumo</span> @endunless

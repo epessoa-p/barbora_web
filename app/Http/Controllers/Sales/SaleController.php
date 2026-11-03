@@ -86,7 +86,8 @@ class SaleController extends Controller
             'products' => Product::sellable()->with('stocks')->orderBy('name')->get(),
             'clients' => Client::where('active', true)->orderBy('full_name')->get(),
             'staff' => Personal::bookable()->orderBy('full_name')->get(),
-            'branches' => Branch::where('active', true)->orderBy('name')->get(),
+            // Solo las sucursales en las que trabaja quien cobra (con una, no hay selector).
+            'branches' => Branch::workableFor(auth()->user(), $this->targetCompanyId()),
         ]);
     }
 

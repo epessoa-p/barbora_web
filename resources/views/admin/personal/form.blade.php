@@ -61,6 +61,25 @@
                             'help' => 'Donde atiende y cobra: sus citas y ventas se numeran en esta sucursal.',
                         ])
 
+                        {{-- Un gerente o administrador que lleva varios locales: además de la
+                             base, en qué otras sucursales trabaja (lo que ve al vender, agendar…). --}}
+                        @if($branches->count() > 1)
+                            @php($extra = collect(old('extra_branch_ids', $personal?->extraBranches()->pluck('branches.id')->all() ?? []))->map(fn ($id) => (int) $id))
+                            <div class="col-md-6">
+                                <label class="form-label">Otras sucursales donde trabaja</label>
+                                <div class="border rounded p-2" style="max-height: 9rem; overflow-y: auto">
+                                    @foreach($branches as $branch)
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" name="extra_branch_ids[]" value="{{ $branch->id }}"
+                                                   id="extra-branch-{{ $branch->id }}" {{ $extra->contains($branch->id) ? 'checked' : '' }}>
+                                            <label class="form-check-label" for="extra-branch-{{ $branch->id }}">{{ $branch->name }}</label>
+                                        </div>
+                                    @endforeach
+                                </div>
+                                <small class="text-muted">Opcional, para gerentes o administradores de varios locales.</small>
+                            </div>
+                        @endif
+
                         <div class="col-md-8">
                             <label class="form-label">Nombre completo <span class="text-danger">*</span></label>
                             <input type="text" name="full_name" id="full_name" class="form-control" value="{{ old('full_name', $personal?->full_name) }}" required>

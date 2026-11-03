@@ -97,6 +97,22 @@ class CatalogController extends ApiController
      * Mismas reglas que la web (App\Http\Controllers\Services\ServiceController).
      * El binding {service} ya está acotado a la empresa activa.
      */
+    /** Subir o quitar la foto del servicio (multipart). */
+    public function updateServicePhoto(Request $request, Service $service): JsonResponse
+    {
+        $request->validate(
+            ['photo' => ['required_without:remove_photo', ...Service::PHOTO_RULES['photo']], 'remove_photo' => Service::PHOTO_RULES['remove_photo']],
+            ['photo.required_without' => 'Elige una imagen.'] + Service::PHOTO_MESSAGES,
+        );
+
+        $service->syncPhoto($request);
+
+        return $this->json([
+            'message' => $service->photo ? 'Foto actualizada.' : 'Foto quitada.',
+            'data' => (new ServiceResource($service->load('category')))->resolve(),
+        ]);
+    }
+
     public function updateService(Request $request, Service $service, ServiceForm $form): JsonResponse
     {
         $service->update($form->validate($request, $service->company_id, $service));

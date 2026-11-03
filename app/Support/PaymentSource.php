@@ -149,14 +149,20 @@ class PaymentSource
     }
 
     /** Turnos abiertos de la empresa, para elegir de cuál sale el dinero. */
-    public static function openSessions(int $companyId)
+    public static function openSessions(int $companyId, ?\App\Models\User $onlyFor = null)
     {
-        return CashSession::withoutGlobalScopes()
+        $query = CashSession::withoutGlobalScopes()
             ->with('caja')
             ->where('company_id', $companyId)
             ->where('status', 'abierta')
-            ->orderBy('opened_at')
-            ->get();
+            ->orderBy('opened_at');
+
+        // Para elegir de dónde pagar: solo los turnos de sus sucursales.
+        if ($onlyFor) {
+            \App\Models\Branch::limitToWorkable($query, 'branch_id', $onlyFor, $companyId);
+        }
+
+        return $query->get();
     }
 
     protected function anyOpenSession(int $companyId, ?int $branchId): ?CashSession

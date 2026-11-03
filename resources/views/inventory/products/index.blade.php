@@ -85,6 +85,9 @@
                     @forelse($products as $product)
                         <tr>
                             <td class="ps-3">
+                                @if($product->photoUrl())
+                                    <img src="{{ $product->photoUrl() }}" alt="" class="rounded float-start me-2" style="width: 40px; height: 40px; object-fit: cover">
+                                @endif
                                 <a href="{{ route('products.show', $product) }}" class="fw-semibold text-decoration-none">
                                     {{ $product->name }}
                                 </a>

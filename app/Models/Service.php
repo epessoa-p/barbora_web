@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToCompany;
+use App\Models\Concerns\HasPhoto;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -10,10 +11,13 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Service extends Model
 {
-    use HasFactory, SoftDeletes, BelongsToCompany;
+    use HasFactory, SoftDeletes, BelongsToCompany, HasPhoto;
+
+    /** Carpeta de las fotos (HasPhoto): services/{company_id}/… */
+    public const PHOTO_FOLDER = 'services';
 
     protected $fillable = [
-        'company_id', 'service_category_id', 'name', 'description',
+        'company_id', 'service_category_id', 'name', 'description', 'photo',
         'duration_minutes', 'price', 'active', 'sort_order',
     ];
 

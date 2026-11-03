@@ -62,6 +62,8 @@
             'items' => [
                 ['show' => $can('services.view') && $hasModule('agenda'), 'route' => 'services.index', 'pattern' => 'services.*', 'icon' => 'bi-scissors', 'label' => 'Servicios'],
                 ['show' => $can('service_categories.view') && $hasModule('agenda'), 'route' => 'service-categories.index', 'pattern' => 'service-categories.*', 'icon' => 'bi-tags', 'label' => 'Categorías'],
+                // El catálogo público (enlace, QR y afiche para la puerta del local).
+                ['show' => $can('settings.view') && $currentCompany, 'route' => 'catalog-settings.edit', 'pattern' => 'catalog-settings.*', 'icon' => 'bi-qr-code', 'label' => 'Catálogo público'],
             ],
         ],
         [
@@ -164,8 +166,6 @@
                 // tenga contratada la agenda.
                 ['show' => $can('settings.view') && $currentCompany, 'route' => 'company-profile.edit', 'pattern' => 'company-profile.*', 'icon' => 'bi-shop', 'label' => 'Mi empresa'],
                 ['show' => $can('settings.view'), 'route' => 'payment-methods.index', 'pattern' => 'payment-methods.*', 'icon' => 'bi-credit-card', 'label' => 'Métodos de pago'],
-                // El catálogo público (enlace, QR y afiche para la puerta del local).
-                ['show' => $can('settings.view') && $currentCompany, 'route' => 'catalog-settings.edit', 'pattern' => 'catalog-settings.*', 'icon' => 'bi-qr-code', 'label' => 'Catálogo'],
             ],
         ],
     ])

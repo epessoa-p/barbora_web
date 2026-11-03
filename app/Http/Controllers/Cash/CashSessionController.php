@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Cash;
 
 use App\Http\Controllers\Controller;
+use App\Models\Branch;
 use App\Models\Caja;
 use App\Models\CashSession;
 use App\Models\Company;
@@ -18,7 +19,9 @@ class CashSessionController extends Controller
     /** Caja actual: el turno abierto, o la invitación a abrir uno. */
     public function current(Request $request)
     {
-        $cajas = Caja::where('active', true)->orderBy('name')->get();
+        // Las cajas de las sucursales en las que trabaja el usuario.
+        $cajas = Branch::limitToWorkable(Caja::where('active', true), 'branch_id', auth()->user(), $this->targetCompanyId())
+            ->orderBy('name')->get();
 
         // Sin caja en la URL, se prefiere la asignada al personal del usuario;
         // si no tiene una propia, la primera de la lista (la general).

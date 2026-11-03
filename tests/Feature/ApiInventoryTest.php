@@ -145,6 +145,44 @@ class ApiInventoryTest extends TestCase
             ->assertJsonPath('data.track_stock', true, 'Lo que no se manda no se toca.');
     }
 
+    public function test_la_foto_del_producto_se_sube_desde_la_app_y_la_web(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('public');
+        $product = $this->product(['name' => 'CERA MATE']);
+        Sanctum::actingAs($this->admin);
+
+        // App: endpoint multipart.
+        $this->post("/api/v1/inventory/products/{$product->id}/photo", [
+            'photo' => \Illuminate\Http\UploadedFile::fake()->image('cera.jpg'),
+        ], $this->headers() + ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonPath('data.photo_url', fn ($url) => str_contains((string) $url, "products/{$this->company->id}/"));
+
+        $first = $product->refresh()->photo;
+        \Illuminate\Support\Facades\Storage::disk('public')->assertExists($first);
+
+        $this->getJson('/api/v1/inventory/products', $this->headers())
+            ->assertJsonPath('data.0.photo_url', fn ($url) => $url !== null);
+
+        // Web: cambiarla borra la anterior; sale en el catálogo público.
+        $web = $this->userInCompany($this->company, ['products.view', 'products.edit'], 'inventario_web');
+        $this->actingInCompany($web, $this->company)->put(route('products.update', $product), [
+            'name' => 'CERA MATE', 'unit' => 'unidad', 'sale_price' => 45, 'cost_price' => 20,
+            'min_stock' => 0, 'is_sellable' => 1, 'track_stock' => 1, 'active' => 1,
+            'photo' => \Illuminate\Http\UploadedFile::fake()->image('nueva.png'),
+        ])->assertSessionHasNoErrors()->assertRedirect();
+        \Illuminate\Support\Facades\Storage::disk('public')->assertMissing($first);
+
+        $this->company->update(['catalog_enabled' => true, 'catalog_show_products' => true]);
+        $this->get(route('catalog.public', \App\Support\Catalog::token($this->company)))
+            ->assertOk()->assertSee($product->refresh()->photoUrl());
+
+        // Quitarla desde la app.
+        Sanctum::actingAs($this->admin);
+        $this->post("/api/v1/inventory/products/{$product->id}/photo", ['remove_photo' => 1], $this->headers() + ['Accept' => 'application/json'])
+            ->assertOk()->assertJsonPath('data.photo_url', null);
+    }
+
     public function test_el_nombre_no_se_repite(): void
     {
         $this->product(['name' => 'CERA MATE']);

@@ -59,7 +59,9 @@ class PurchaseController extends Controller
     {
         $company = $request->attributes->get('tenant_company');
         $preferredBranch = Branch::preferredIdFor($request->user(), $company->id);
-        $warehouses = Warehouse::where('active', true)->orderBy('name')->get();
+        // Los almacenes de sus sucursales (y los centrales, sin sucursal).
+        $warehouses = Branch::limitToWorkable(Warehouse::where('active', true), 'branch_id', $request->user(), $company->id)
+            ->orderBy('name')->get();
 
         return view('purchases.create', [
             'suppliers' => Supplier::active()->orderBy('name')->get(),

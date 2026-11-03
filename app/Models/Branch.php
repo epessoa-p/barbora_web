@@ -82,6 +82,68 @@ class Branch extends Model
     }
 
     /**
+     * Las sucursales en las que trabaja el usuario: las que ve en los
+     * selectores del día a día (vender, agendar, gastar, abrir caja).
+     *
+     *   · Superadmin y quien administra sucursales (branches.edit): todas.
+     *   · Con ficha de personal: su base y sus adicionales.
+     *   · Sin ficha (o sin ninguna asignada): todas, como hasta ahora.
+     *
+     * Devuelve null cuando son todas (sin filtro).
+     *
+     * @return array<int, int>|null
+     */
+    public static function workableIdsFor(?User $user, ?int $companyId): ?array
+    {
+        if (! $user || ! $companyId || $user->is_super_admin) {
+            return null;
+        }
+
+        $company = Company::find($companyId);
+
+        if ($company && $user->hasPermissionInCompany('branches.edit', $company)) {
+            return null;
+        }
+
+        $personal = Personal::withoutGlobalScopes()
+            ->where('company_id', $companyId)
+            ->where('user_id', $user->id)
+            ->first();
+
+        $ids = $personal?->branchIds() ?? [];
+
+        return $ids === [] ? null : $ids;
+    }
+
+    /**
+     * Las sucursales activas que el usuario puede elegir (ver workableIdsFor).
+     *
+     * @return \Illuminate\Support\Collection<int, Branch>
+     */
+    public static function workableFor(?User $user, ?int $companyId)
+    {
+        $ids = static::workableIdsFor($user, $companyId);
+
+        return static::where('active', true)
+            ->when($ids !== null, fn ($q) => $q->whereIn('id', $ids))
+            ->orderBy('name')
+            ->get();
+    }
+
+    /**
+     * Acota una consulta (cajas, turnos, almacenes) a las sucursales del
+     * usuario. Lo que no tiene sucursal (un almacén central) se deja.
+     */
+    public static function limitToWorkable($query, string $column, ?User $user, ?int $companyId)
+    {
+        $ids = static::workableIdsFor($user, $companyId);
+
+        return $query->when($ids !== null, fn ($q) => $q->where(
+            fn ($w) => $w->whereIn($column, $ids)->orWhereNull($column),
+        ));
+    }
+
+    /**
      * La que se propone en los formularios: la del usuario y, si no tiene, la
      * por defecto de la empresa.
      */

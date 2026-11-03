@@ -67,6 +67,8 @@ class PersonalController extends Controller
                 'company_id' => ['nullable', 'exists:companies,id'],
                 'cargo_id' => ['required', 'exists:cargos,id'],
                 'branch_id' => $this->branchRule($companyId),
+                'extra_branch_ids' => ['nullable', 'array'],
+                'extra_branch_ids.*' => [Rule::exists('branches', 'id')->where('company_id', $companyId)],
                 'full_name' => ['required', 'string', 'max:255'],
                 'id_number' => ['nullable', 'string', 'max:50'],
                 'phone' => ['nullable', 'string', 'max:30'],
@@ -108,7 +110,7 @@ class PersonalController extends Controller
                     $userId = $user->id;
                 }
 
-                Personal::create([
+                $created = Personal::create([
                     'company_id' => $companyId,
                     'cargo_id' => $cargo->id,
                     'branch_id' => $validated['branch_id'] ?? null,
@@ -126,6 +128,8 @@ class PersonalController extends Controller
                     'agenda_color' => $validated['agenda_color'] ?? '#2563eb',
                     'bookable' => $request->boolean('bookable'),
                 ]);
+
+                $created->syncExtraBranches($validated['extra_branch_ids'] ?? []);
             });
 
             return redirect()->route('personal.index')->with('success',
@@ -183,6 +187,8 @@ class PersonalController extends Controller
                 'company_id' => ['nullable', 'exists:companies,id'],
                 'cargo_id' => ['required', 'exists:cargos,id'],
                 'branch_id' => $this->branchRule($companyId),
+                'extra_branch_ids' => ['nullable', 'array'],
+                'extra_branch_ids.*' => [Rule::exists('branches', 'id')->where('company_id', $companyId)],
                 'full_name' => ['required', 'string', 'max:255'],
                 'id_number' => ['nullable', 'string', 'max:50'],
                 'phone' => ['nullable', 'string', 'max:30'],
@@ -249,6 +255,8 @@ class PersonalController extends Controller
                     'agenda_color' => $validated['agenda_color'] ?? '#2563eb',
                     'bookable' => $request->boolean('bookable'),
                 ]);
+
+                $personal->syncExtraBranches($validated['extra_branch_ids'] ?? []);
             });
 
             return redirect()->route('personal.index')->with('success', 'Personal actualizado exitosamente.');

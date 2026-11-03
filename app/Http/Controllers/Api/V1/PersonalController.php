@@ -46,6 +46,7 @@ class PersonalController extends ApiController
             'active' => $request->boolean('active', true),
         ]);
 
+        $personal->syncExtraBranches($data['extra_branch_ids'] ?? []);
         $personal->load(['cargo', 'branch']);
 
         return $this->json([
@@ -70,6 +71,10 @@ class PersonalController extends ApiController
             'bookable' => $request->boolean('bookable'),
             'active' => $request->boolean('active', (bool) $personal->active),
         ]);
+
+        if (array_key_exists('extra_branch_ids', $data)) {
+            $personal->syncExtraBranches($data['extra_branch_ids']);
+        }
 
         $personal->load(['cargo', 'branch']);
 
@@ -111,6 +116,8 @@ class PersonalController extends ApiController
                 Branch::forCompany($companyId)->exists() ? 'required' : 'nullable',
                 Rule::exists('branches', 'id')->where('company_id', $companyId)->whereNull('deleted_at'),
             ],
+            'extra_branch_ids' => ['sometimes', 'array'],
+            'extra_branch_ids.*' => [Rule::exists('branches', 'id')->where('company_id', $companyId)],
             'full_name' => ['required', 'string', 'max:255'],
             'id_number' => ['nullable', 'string', 'max:50'],
             'phone' => ['nullable', 'string', 'max:30'],
@@ -134,6 +141,8 @@ class PersonalController extends ApiController
             'cargo' => $personal->cargo?->name,
             'branch_id' => $personal->branch_id,
             'branch' => $personal->branch?->name,
+            // Sucursales adicionales (además de la base): un gerente de varios locales.
+            'extra_branch_ids' => $personal->extraBranches()->pluck('branches.id')->map(fn ($id) => (int) $id)->all(),
             'phone' => $personal->phone,
             'specialty' => $personal->specialty,
             'agenda_color' => $personal->agenda_color,

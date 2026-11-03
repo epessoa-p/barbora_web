@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Models\Branch;
 use App\Models\Caja;
 use App\Models\CashMovement;
 use App\Models\CashSession;
@@ -27,7 +28,9 @@ class CashController extends ApiController
     /** Cajas de la barbería y cuál tiene turno abierto. */
     public function cajas(): JsonResponse
     {
-        $cajas = Caja::where('active', true)->with('branch')->orderBy('name')->get();
+        // Las cajas de las sucursales en las que trabaja el usuario.
+        $cajas = Branch::limitToWorkable(Caja::where('active', true), 'branch_id', request()->user(), request()->attributes->get('tenant_company')?->id)
+            ->with('branch')->orderBy('name')->get();
 
         return $this->json([
             'data' => $cajas->map(fn (Caja $caja) => [

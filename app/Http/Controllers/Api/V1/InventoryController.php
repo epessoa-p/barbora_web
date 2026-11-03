@@ -131,6 +131,22 @@ class InventoryController extends ApiController
         ]);
     }
 
+    /** Subir o quitar la foto del producto (multipart). */
+    public function updatePhoto(Request $request, Product $product): JsonResponse
+    {
+        $request->validate(
+            ['photo' => ['required_without:remove_photo', ...Product::PHOTO_RULES['photo']], 'remove_photo' => Product::PHOTO_RULES['remove_photo']],
+            ['photo.required_without' => 'Elige una imagen.'] + Product::PHOTO_MESSAGES,
+        );
+
+        $product->syncPhoto($request);
+
+        return $this->json([
+            'message' => $product->photo ? 'Foto actualizada.' : 'Foto quitada.',
+            'data' => $this->summary($product->refresh()->load(['category', 'stocks'])),
+        ]);
+    }
+
     /** Entrada, salida o ajuste (recuento): mismas reglas que la web. */
     public function storeMovement(Request $request, StockMovementForm $form): JsonResponse
     {
@@ -165,6 +181,7 @@ class InventoryController extends ApiController
             'track_stock' => (bool) $p->track_stock,
             'is_sellable' => (bool) $p->is_sellable,
             'active' => (bool) $p->active,
+            'photo_url' => $p->photoUrl(),
             // Null cuando no se lleva control: no es lo mismo que cero.
             'stock' => $total,
             'stock_label' => $total === null ? null : $p->formatQuantity($total),

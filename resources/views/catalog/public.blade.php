@@ -30,6 +30,7 @@
         .item { display: flex; justify-content: space-between; gap: 1rem; padding: .9rem 1.1rem; border-bottom: 1px solid var(--border); break-inside: avoid; }
         .item:last-child { border-bottom: 0; }
         .item-name { font-weight: 700; }
+        .item-photo { width: 64px; height: 64px; border-radius: 12px; object-fit: cover; flex-shrink: 0; background: var(--canvas); }
         .item-desc { color: var(--muted); font-size: .86rem; }
         .item-price { font-weight: 800; white-space: nowrap; color: var(--ink); }
         .group-name { font-weight: 800; font-size: 1.05rem; margin: 1rem 0 .5rem; }
@@ -89,10 +90,15 @@
             <div class="item-card mb-3">
                 @foreach($items as $service)
                     <div class="item">
-                        <div>
-                            <div class="item-name">{{ $service->name }}</div>
-                            @if($service->description)<div class="item-desc">{{ $service->description }}</div>@endif
-                            <div class="item-desc"><i class="bi bi-clock"></i> {{ $service->durationLabel() }}</div>
+                        <div class="d-flex gap-3 align-items-center">
+                            @if($service->photoUrl())
+                                <img src="{{ $service->photoUrl() }}" alt="{{ $service->name }}" class="item-photo" loading="lazy">
+                            @endif
+                            <div>
+                                <div class="item-name">{{ $service->name }}</div>
+                                @if($service->description)<div class="item-desc">{{ $service->description }}</div>@endif
+                                <div class="item-desc"><i class="bi bi-clock"></i> {{ $service->durationLabel() }}</div>
+                            </div>
                         </div>
                         <div class="item-price">{{ $money($service->price) }}</div>
                     </div>
@@ -109,9 +115,14 @@
                 <div class="item-card mb-3">
                     @foreach($items as $product)
                         <div class="item">
-                            <div>
-                                <div class="item-name">{{ $product->name }}</div>
-                                @if($product->description)<div class="item-desc">{{ $product->description }}</div>@endif
+                            <div class="d-flex gap-3 align-items-center">
+                                @if($product->photoUrl())
+                                    <img src="{{ $product->photoUrl() }}" alt="{{ $product->name }}" class="item-photo" loading="lazy">
+                                @endif
+                                <div>
+                                    <div class="item-name">{{ $product->name }}</div>
+                                    @if($product->description)<div class="item-desc">{{ $product->description }}</div>@endif
+                                </div>
                             </div>
                             <div class="item-price">{{ $money($product->sale_price) }}</div>
                         </div>

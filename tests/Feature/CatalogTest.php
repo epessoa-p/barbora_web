@@ -151,6 +151,64 @@ class CatalogTest extends TestCase
 
     // ── Clientes ────────────────────────────────────────────────────────────
 
+    public function test_la_foto_del_servicio_se_sube_cambia_y_sale_en_el_catalogo(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('public');
+        $company = $this->companyWithPlan();
+        $user = $this->userInCompany($company, ['services.view', 'services.create', 'services.edit']);
+
+        $this->actingInCompany($user, $company)->post(route('services.store'), [
+            'name' => 'CORTE CLÁSICO', 'duration_minutes' => 30, 'price' => 50, 'active' => 1,
+            'photo' => \Illuminate\Http\UploadedFile::fake()->image('corte.jpg', 400, 400),
+        ])->assertRedirect();
+
+        $service = Service::allCompanies()->firstOrFail();
+        $first = $service->photo;
+        $this->assertStringStartsWith("services/{$company->id}/", $first);
+        \Illuminate\Support\Facades\Storage::disk('public')->assertExists($first);
+
+        $this->actingInCompany($user, $company)->get(route('services.index'))->assertOk()->assertSee($service->photoUrl());
+
+        // Cambiarla borra la anterior.
+        $this->actingInCompany($user, $company)->put(route('services.update', $service), [
+            'name' => 'CORTE CLÁSICO', 'duration_minutes' => 30, 'price' => 50, 'active' => 1,
+            'photo' => \Illuminate\Http\UploadedFile::fake()->image('nuevo.png', 300, 300),
+        ])->assertRedirect();
+        \Illuminate\Support\Facades\Storage::disk('public')->assertMissing($first);
+
+        // Sale en el catálogo público.
+        $company->update(['catalog_enabled' => true]);
+        $this->get(route('catalog.public', \App\Support\Catalog::token($company)))
+            ->assertOk()->assertSee($service->refresh()->photoUrl());
+
+        // Un archivo que no es imagen se rechaza.
+        $this->actingInCompany($user, $company)->put(route('services.update', $service), [
+            'name' => 'CORTE CLÁSICO', 'duration_minutes' => 30, 'price' => 50,
+            'photo' => \Illuminate\Http\UploadedFile::fake()->create('virus.pdf', 10, 'application/pdf'),
+        ])->assertSessionHasErrors('photo');
+    }
+
+    public function test_la_app_sube_y_quita_la_foto_del_servicio(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('public');
+        $company = $this->companyWithPlan();
+        $service = Service::factory()->create(['company_id' => $company->id]);
+        $user = $this->userInCompany($company, ['services.view', 'services.edit']);
+        \Laravel\Sanctum\Sanctum::actingAs($user);
+        $headers = ['X-Company-Id' => (string) $company->id, 'Accept' => 'application/json'];
+
+        $this->post("/api/v1/services/{$service->id}/photo", [
+            'photo' => \Illuminate\Http\UploadedFile::fake()->image('foto.jpg'),
+        ], $headers)->assertOk()->assertJsonPath('data.photo_url', fn ($url) => str_contains((string) $url, "services/{$company->id}/"));
+
+        $this->getJson('/api/v1/services', $headers)->assertOk()
+            ->assertJsonPath('data.0.photo_url', fn ($url) => $url !== null);
+
+        $this->post("/api/v1/services/{$service->id}/photo", ['remove_photo' => 1], $headers)
+            ->assertOk()->assertJsonPath('data.photo_url', null);
+        $this->assertNull($service->refresh()->photo);
+    }
+
     public function test_se_registra_un_cliente(): void
     {
         $company = $this->companyWithPlan();

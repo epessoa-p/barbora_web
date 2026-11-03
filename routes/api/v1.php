@@ -85,6 +85,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/services', [CatalogController::class, 'storeService'])
             ->middleware('check-permission:services.create')->name('services.store');
 
+        // La foto del servicio (multipart: POST, PHP no lee archivos en un PUT).
+        Route::post('/services/{service}/photo', [CatalogController::class, 'updateServicePhoto'])
+            ->middleware('check-permission:services.edit')->name('services.photo');
+
         // Reservar: barberos, huecos libres y alta de la cita. Las reglas son
         // las de la web (App\Support\AppointmentBooker).
         Route::get('/staff', [BookingController::class, 'staff'])
@@ -181,6 +185,9 @@ Route::middleware('auth:sanctum')->group(function () {
             ->middleware('check-permission:products.view')->name('products.show');
         Route::put('/products/{product}', [InventoryController::class, 'update'])
             ->middleware('check-permission:products.edit')->name('products.update');
+        // La foto del producto (multipart: POST, PHP no lee archivos en un PUT).
+        Route::post('/products/{product}/photo', [InventoryController::class, 'updatePhoto'])
+            ->middleware('check-permission:products.edit')->name('products.photo');
         Route::post('/movements', [InventoryController::class, 'storeMovement'])
             ->middleware('check-permission:stock.create')->name('movements.store');
     });

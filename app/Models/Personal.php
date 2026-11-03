@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Facades\Storage;
@@ -59,6 +60,30 @@ class Personal extends Model
     public function branch(): BelongsTo
     {
         return $this->belongsTo(Branch::class);
+    }
+
+    /** Sucursales ADICIONALES (la base es branch()): un gerente de dos locales. */
+    public function extraBranches(): BelongsToMany
+    {
+        return $this->belongsToMany(Branch::class, 'branch_personal');
+    }
+
+    /** Guarda las adicionales. La base no se repite como adicional. */
+    public function syncExtraBranches(array $branchIds): void
+    {
+        $this->extraBranches()->sync(
+            collect($branchIds)->map(fn ($id) => (int) $id)
+                ->reject(fn ($id) => $id === (int) $this->branch_id)
+                ->unique()->values()->all(),
+        );
+    }
+
+    /** Todas sus sucursales: la base y las adicionales. */
+    public function branchIds(): array
+    {
+        return collect([$this->branch_id])
+            ->merge($this->extraBranches()->pluck('branches.id'))
+            ->filter()->unique()->map(fn ($id) => (int) $id)->values()->all();
     }
 
     public function cargo(): BelongsTo

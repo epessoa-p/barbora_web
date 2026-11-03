@@ -58,7 +58,9 @@ class ProductController extends Controller
             ]);
         }
 
+        $request->validate(Product::PHOTO_RULES, Product::PHOTO_MESSAGES);
         $product = Product::create($this->validated($request, null, $companyId));
+        $product->syncPhoto($request);
 
         return redirect()->route('products.show', $product)
             ->with('success', "Producto «{$product->name}» creado exitosamente.");
@@ -81,7 +83,9 @@ class ProductController extends Controller
 
     public function update(Request $request, Product $product)
     {
+        $request->validate(Product::PHOTO_RULES, Product::PHOTO_MESSAGES);
         $product->update($this->validated($request, $product, $product->company_id));
+        $product->syncPhoto($request);
 
         return redirect()->route('products.show', $product)
             ->with('success', 'Producto actualizado exitosamente.');

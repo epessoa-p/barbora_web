@@ -1,6 +1,6 @@
 <div class="card mt-4">
     <div class="card-body">
-        <form action="{{ $product ? route('products.update', $product) : route('products.store') }}" method="POST">
+        <form action="{{ $product ? route('products.update', $product) : route('products.store') }}" method="POST" enctype="multipart/form-data">
             @csrf
             @if($product) @method('PUT') @endif
 
@@ -37,6 +37,12 @@
                     <input type="text" id="description" name="description" class="form-control"
                            value="{{ old('description', $product?->description) }}">
                 </div>
+
+                {{-- Sale en la lista, en la ficha y en el catálogo público. --}}
+                @include('partials.photo-input', [
+                    'model' => $product,
+                    'help' => 'JPG, PNG o WEBP, hasta 2 MB. Si el catálogo muestra productos, sale ahí.',
+                ])
 
                 <div class="col-md-3">
                     <label for="unit" class="form-label">Unidad</label>

@@ -109,6 +109,34 @@ class ApiFinanceTest extends TestCase
         ], $this->headers())->assertStatus(422)->assertJsonValidationErrors('source');
     }
 
+    public function test_las_pestanas_de_gastos_filtran_por_grupo(): void
+    {
+        $account = FinanceAccount::withoutGlobalScopes()->create(['company_id' => $this->company->id, 'name' => 'BANCO', 'type' => 'banco', 'balance' => 1000, 'active' => true]);
+        $options = fn (?string $group = null) => collect($this->getJson('/api/v1/finance/options'.($group ? "?group={$group}" : ''), $this->headers())->json('categories'));
+
+        // Las básicas por defecto son alquiler, luz, agua e internet.
+        $this->assertSame(['ALQUILER', 'LUZ', 'AGUA', 'INTERNET Y TELÉFONO'], $options('basicos')->pluck('name')->all());
+        $this->assertSame(['PAGO A PROVEEDORES'], $options('proveedor')->pluck('name')->all());
+
+        $spend = fn (string $name, float $amount) => $this->postJson('/api/v1/finance/expenses', [
+            'expense_category_id' => $options()->firstWhere('name', $name)['id'], 'description' => $name, 'amount' => $amount,
+            'spent_on' => now()->toDateString(), 'source' => 'account', 'finance_account_id' => $account->id,
+        ], $this->headers())->assertCreated();
+
+        $spend('LUZ', 100);
+        $spend('PAGO A PERSONAL', 50);
+        $spend('COMIDA', 20);
+
+        $this->getJson('/api/v1/finance/expenses?group=basicos', $this->headers())->assertJsonPath('total', 100.0);
+        $this->getJson('/api/v1/finance/expenses?group=personal', $this->headers())->assertJsonPath('total', 50.0);
+        $this->getJson('/api/v1/finance/expenses', $this->headers())->assertJsonPath('total', 170.0);
+
+        // Una categoría nueva marcada como básica entra en la pestaña.
+        $this->postJson('/api/v1/finance/expense-categories', ['name' => 'GAS', 'payee' => 'ninguno', 'recurring' => true], $this->headers())
+            ->assertCreated()->assertJsonPath('data.recurring', true);
+        $this->assertContains('GAS', $options('basicos')->pluck('name')->all());
+    }
+
     public function test_categorias_de_gasto(): void
     {
         $this->getJson('/api/v1/finance/expense-categories', $this->headers())->assertOk()->assertJsonPath('payees.personal', 'Alguien del personal');

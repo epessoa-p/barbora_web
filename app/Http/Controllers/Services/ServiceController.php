@@ -38,7 +38,9 @@ class ServiceController extends Controller
 
     public function store(Request $request)
     {
+        $request->validate(Service::PHOTO_RULES, Service::PHOTO_MESSAGES);
         $service = Service::create($this->validated($request));
+        $service->syncPhoto($request);
 
         return redirect()->route('services.index')
             ->with('success', "Servicio «{$service->name}» creado exitosamente.");
@@ -54,7 +56,9 @@ class ServiceController extends Controller
 
     public function update(Request $request, Service $service)
     {
+        $request->validate(Service::PHOTO_RULES, Service::PHOTO_MESSAGES);
         $service->update($this->validated($request, $service));
+        $service->syncPhoto($request);
 
         return redirect()->route('services.index')
             ->with('success', 'Servicio actualizado exitosamente.');

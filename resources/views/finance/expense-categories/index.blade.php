@@ -24,11 +24,17 @@
     <form action="{{ route('expense-categories.store') }}" method="POST" class="card border-0 shadow-sm mb-4">
         @csrf
         <div class="card-body p-3 row g-2 align-items-end">
-            <div class="col-md-6">
+            <div class="col-md-5">
                 <label class="form-label small">Nueva categoría</label>
                 <input type="text" name="name" class="form-control" maxlength="255" required placeholder="GAS, PUBLICIDAD, CAPACITACIÓN…">
             </div>
-            <div class="col-md-4">
+            <div class="col-md-2">
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" name="recurring" value="1" id="new-recurring">
+                    <label class="form-check-label small" for="new-recurring" title="Alquiler, luz, agua… lo que se paga cada mes o cada año">Servicio básico</label>
+                </div>
+            </div>
+            <div class="col-md-3">
                 <label class="form-label small">A quién se paga</label>
                 <select name="payee" class="form-select">
                     @foreach(\App\Models\ExpenseCategory::PAYEES as $value => $label)
@@ -49,6 +55,7 @@
                     <tr>
                         <th class="ps-3">Categoría</th>
                         <th>A quién se paga</th>
+                        <th class="text-center" title="Servicio básico: alquiler, luz, agua… (mensual o anual)">Básico</th>
                         <th class="text-center">Gastos</th>
                         <th class="text-center">Activa</th>
                         <th class="text-end pe-3"></th>
@@ -58,17 +65,20 @@
                     @foreach($categories as $category)
                         <tr class="{{ $category->active ? '' : 'opacity-50' }}">
                             @if($canEdit)
-                                <td class="ps-3" colspan="4">
+                                <td class="ps-3" colspan="5">
                                     <form action="{{ route('expense-categories.update', $category) }}" method="POST" class="row g-2 align-items-center">
                                         @csrf
                                         @method('PUT')
-                                        <div class="col-md-5"><input type="text" name="name" class="form-control form-control-sm" value="{{ $category->name }}" required></div>
+                                        <div class="col-md-4"><input type="text" name="name" class="form-control form-control-sm" value="{{ $category->name }}" required></div>
                                         <div class="col-md-3">
                                             <select name="payee" class="form-select form-select-sm">
                                                 @foreach(\App\Models\ExpenseCategory::PAYEES as $value => $label)
                                                     <option value="{{ $value }}" {{ $category->payee === $value ? 'selected' : '' }}>{{ $label }}</option>
                                                 @endforeach
                                             </select>
+                                        </div>
+                                        <div class="col-md-1 text-center">
+                                            <input class="form-check-input" type="checkbox" name="recurring" value="1" title="Servicio básico" {{ $category->recurring ? 'checked' : '' }}>
                                         </div>
                                         <div class="col-md-1 text-center small text-muted">{{ $category->expenses_count }}</div>
                                         <div class="col-md-1 text-center">
@@ -80,6 +90,7 @@
                             @else
                                 <td class="ps-3 fw-semibold">{{ $category->name }}</td>
                                 <td>{{ $category->payeeLabel() }}</td>
+                                <td class="text-center">{{ $category->recurring ? 'Sí' : '—' }}</td>
                                 <td class="text-center">{{ $category->expenses_count }}</td>
                                 <td class="text-center">{{ $category->active ? 'Sí' : 'No' }}</td>
                             @endif

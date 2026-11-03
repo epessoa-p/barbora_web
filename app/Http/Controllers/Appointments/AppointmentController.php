@@ -153,7 +153,7 @@ class AppointmentController extends Controller
             'staff' => Personal::bookable()->with('schedules')->orderBy('full_name')->get(),
             'clients' => Client::where('active', true)->orderBy('full_name')->get(),
             'services' => Service::where('active', true)->with('category')->orderBy('name')->get(),
-            'branches' => Branch::where('active', true)->orderBy('name')->get(),
+            'branches' => Branch::workableFor(auth()->user(), $this->targetCompanyId()),
         ];
     }
 
