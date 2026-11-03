@@ -27,6 +27,7 @@ class ProductsReport
             // vista deja de avisar sola: no hay que acordarse de quitarlo.
             'estimated' => $rows->contains('estimated', true),
             'lowStock' => $this->lowStock(),
+            'inventory' => $this->inventory($period->branchId),
             'idle' => $this->idle($rows),
         ];
     }
@@ -85,6 +86,42 @@ class ProductsReport
             })
             ->sortByDesc('revenue')
             ->values();
+    }
+
+    /**
+     * Lo que vale el inventario hoy: a costo y a precio de venta, y la
+     * ganancia que dejaría venderlo todo. Es una foto del stock actual, no
+     * depende del periodo. Con sucursal, solo sus almacenes.
+     */
+    public function inventory(?int $branchId = null): array
+    {
+        $rows = Stock::query()
+            ->join('products', 'products.id', '=', 'stocks.product_id')
+            ->join('warehouses', 'warehouses.id', '=', 'stocks.warehouse_id')
+            ->whereNull('products.deleted_at')
+            ->whereNull('warehouses.deleted_at')
+            ->where('products.active', true)
+            ->where('products.track_stock', true)
+            ->where('stocks.quantity', '>', 0)
+            ->when($branchId, fn ($q) => $q->where('warehouses.branch_id', $branchId))
+            ->selectRaw('stocks.product_id')
+            ->selectRaw('SUM(stocks.quantity) as units')
+            ->selectRaw('SUM(stocks.quantity * COALESCE(products.cost_price, 0)) as cost')
+            // Un insumo (no se vende) no suma valor de venta.
+            ->selectRaw('SUM(CASE WHEN products.is_sellable THEN stocks.quantity * COALESCE(products.sale_price, 0) ELSE 0 END) as sale')
+            ->groupBy('stocks.product_id')
+            ->get();
+
+        $cost = round((float) $rows->sum('cost'), 2);
+        $sale = round((float) $rows->sum('sale'), 2);
+
+        return [
+            'products' => $rows->count(),
+            'units' => (float) $rows->sum('units'),
+            'cost' => $cost,
+            'sale' => $sale,
+            'potential' => round($sale - $cost, 2),
+        ];
     }
 
     /** Productos por debajo de su umbral de aviso. */

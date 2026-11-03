@@ -6,7 +6,8 @@
     <div>
         <h1 class="h4 fw-bold mb-1"><i class="bi {{ $icon ?? 'bi-bar-chart' }}"></i> {{ $title }}</h1>
         <p class="text-muted mb-0">
-            {{ $period->label() }}
+            {{-- Un reporte sin rango de fechas (Análisis) no muestra el periodo. --}}
+            {{ empty($noPeriod) ? $period->label() : '' }}
             @if($period->branchId)
                 · {{ $branches->firstWhere('id', $period->branchId)?->name }}
             @endif

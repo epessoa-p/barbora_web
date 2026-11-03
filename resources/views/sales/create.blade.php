@@ -68,7 +68,14 @@
                         </li>
                     </ul>
 
-                    <input type="search" class="form-control mb-3" id="catalog-search" placeholder="Buscar…">
+                    <div class="d-flex gap-2 mb-3">
+                        <input type="search" class="form-control" id="catalog-search" placeholder="Buscar…">
+                        {{-- Algo que se tiene pero no está en el inventario. --}}
+                        <button type="button" class="btn btn-outline-secondary text-nowrap" data-bs-toggle="modal" data-bs-target="#quick-sale-modal"
+                                title="Vender un producto que no está registrado en el inventario">
+                            <i class="bi bi-lightning-charge"></i> Venta rápida
+                        </button>
+                    </div>
 
                     <div class="tab-content">
                         <div class="tab-pane fade show active" id="tab-services">
@@ -259,6 +266,45 @@
     </div>
 </form>
 
+{{-- Venta rápida: fuera del formulario de la venta (no se anidan formularios). --}}
+<div class="modal fade" id="quick-sale-modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form class="modal-content" id="quick-sale-form">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-lightning-charge"></i> Venta rápida</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted">
+                    Para un producto que tienes pero no está registrado en el inventario. No descuenta
+                    stock y, como no tiene costo conocido, en Ganancias va aparte.
+                </p>
+                <div class="mb-3">
+                    <label for="quick-name" class="form-label">Producto</label>
+                    <input type="text" id="quick-name" class="form-control" maxlength="255" required placeholder="GEL FIJADOR">
+                </div>
+                <div class="row g-2">
+                    <div class="col-7">
+                        <label for="quick-price" class="form-label">Precio</label>
+                        <div class="input-group">
+                            <span class="input-group-text">{{ $symbol }}</span>
+                            <input type="number" id="quick-price" class="form-control" step="0.01" min="0.01" required>
+                        </div>
+                    </div>
+                    <div class="col-5">
+                        <label for="quick-qty" class="form-label">Cantidad</label>
+                        <input type="number" id="quick-qty" class="form-control" step="1" min="1" value="1" required>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light border" data-bs-dismiss="modal">Cancelar</button>
+                <button type="submit" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Añadir a la comanda</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 @if($canCreateClient)
     @include('clients.partials.quick-create', ['selectId' => 'client_id'])
 @endif
@@ -281,6 +327,24 @@
     const money = (n) => symbol + ' ' + (Math.round(n * 100) / 100).toFixed(2);
 
     // ── Comanda ─────────────────────────────────────────────────────────────
+
+    const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+
+    // Venta rápida: un producto que no está en el inventario. Cada una es su
+    // propia línea (no se suman entre sí por nombre).
+    let quickId = 0;
+    document.getElementById('quick-sale-form')?.addEventListener('submit', function (event) {
+        event.preventDefault();
+        const name = document.getElementById('quick-name').value.trim().toUpperCase();
+        const price = parseFloat(document.getElementById('quick-price').value);
+        const qty = parseFloat(document.getElementById('quick-qty').value) || 1;
+        if (!name || !(price > 0)) return;
+
+        cart.push({ type: 'rapido', id: 'q' + (++quickId), name, price, quantity: qty, stock: null });
+        render();
+        this.reset();
+        bootstrap.Modal.getInstance(document.getElementById('quick-sale-modal')).hide();
+    });
 
     function addLine(type, id, name, price, stock) {
         const existing = cart.find((l) => l.type === type && l.id === id);
@@ -306,7 +370,8 @@
             row.className = 'cart-line d-flex align-items-center gap-2 py-2 border-bottom';
             row.innerHTML =
                 '<div class="flex-fill">' +
-                    '<div class="fw-semibold small">' + line.name + '</div>' +
+                    '<div class="fw-semibold small">' + escapeHtml(line.name) +
+                        (line.type === 'rapido' ? ' <span class="badge bg-light text-dark border">Rápida</span>' : '') + '</div>' +
                     '<div class="text-muted" style="font-size:.75rem">' + money(line.price) + ' c/u</div>' +
                 '</div>' +
                 '<input type="number" class="form-control form-control-sm qty" style="width:4.5rem" ' +
@@ -314,7 +379,11 @@
                 '<div class="text-end fw-semibold small" style="width:5.5rem">' + money(line.price * line.quantity) + '</div>' +
                 '<button type="button" class="btn btn-sm btn-link text-danger p-0 remove"><i class="bi bi-x-lg"></i></button>' +
                 '<input type="hidden" name="items[' + index + '][type]" value="' + line.type + '">' +
-                '<input type="hidden" name="items[' + index + '][id]" value="' + line.id + '">' +
+                (line.type === 'rapido'
+                    // Venta rápida: sin ficha; el nombre y el precio van en la línea.
+                    ? '<input type="hidden" name="items[' + index + '][name]" value="' + escapeHtml(line.name) + '">' +
+                      '<input type="hidden" name="items[' + index + '][price]" value="' + line.price + '">'
+                    : '<input type="hidden" name="items[' + index + '][id]" value="' + line.id + '">') +
                 '<input type="hidden" name="items[' + index + '][quantity]" value="' + line.quantity + '">';
 
             row.querySelector('.qty').addEventListener('input', function () {

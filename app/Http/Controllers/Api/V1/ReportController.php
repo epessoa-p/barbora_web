@@ -3,12 +3,16 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Support\ReportPeriod;
+use App\Support\Reports\AnalysisReport;
+use App\Support\Reports\BalanceReport;
 use App\Support\Reports\ClientsReport;
 use App\Support\Reports\EarningsReport;
 use App\Support\Reports\ProductsReport;
+use App\Support\Reports\ProfitReport;
 use App\Support\Reports\SalesReport;
 use App\Support\Reports\ServicesReport;
 use App\Support\Reports\StaffReport;
+use App\Support\Tenancy;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -31,6 +35,55 @@ class ReportController extends ApiController
         'clientes' => 'Clientes',
         'ganancias' => 'Ganancias',
     ];
+
+    /**
+     * Ganancia por lo vendido (la pantalla de Ganancias de la app): por
+     * productos y servicios, por día, por producto y por venta. Ver
+     * ProfitReport. Incluye el resultado después de gastos (EarningsReport).
+     */
+    public function profit(Request $request): JsonResponse
+    {
+        $period = ReportPeriod::fromRequest($request);
+        $earnings = app(EarningsReport::class)->for($period);
+
+        return $this->json([
+            'period' => $this->period($request, $period),
+            ...app(ProfitReport::class)->for($period, (string) $request->query('scope', 'ambos'), $request->boolean('quick')),
+            // Lo que queda después de las comisiones y los gastos del periodo.
+            'result' => [
+                'expenses' => $earnings['other_expenses'],
+                'net' => $earnings['net'],
+            ],
+        ]);
+    }
+
+    /**
+     * Balance del dinero (la pantalla Balance de la app): resultados, los
+     * movimientos de caja o tesorería (?source, ?type) y los cierres de caja.
+     * Ver BalanceReport.
+     */
+    public function balance(Request $request): JsonResponse
+    {
+        $period = ReportPeriod::fromRequest($request);
+
+        return $this->json([
+            'period' => $this->period($request, $period),
+            ...app(BalanceReport::class)->for($period, (string) $request->query('source', 'caja'), $request->query('type')),
+        ]);
+    }
+
+    /**
+     * Análisis (la pantalla Análisis de la app): semana y mes contra el mismo
+     * tramo anterior, por día, semana y mes, y el top del mes. Ver
+     * AnalysisReport. Compras solo viene con el módulo «inventario».
+     */
+    public function analysis(Request $request): JsonResponse
+    {
+        $branchId = $request->filled('branch_id') ? (int) $request->input('branch_id') : null;
+        $withPurchases = (bool) app(Tenancy::class)->company()?->planAllows('inventario');
+
+        return $this->json(app(AnalysisReport::class)->for($branchId, $withPurchases));
+    }
 
     public function show(Request $request, string $type): JsonResponse
     {
@@ -57,6 +110,7 @@ class ReportController extends ApiController
             'charts' => $payload['charts'] ?? [],
             'tables' => $payload['tables'],
             'note' => $payload['note'] ?? null,
+            'inventory' => $payload['inventory'] ?? null,
         ]);
     }
 
@@ -166,6 +220,9 @@ class ReportController extends ApiController
                 $this->stat('Costo', $r['totals']['cost'], 'money'),
                 $this->stat('Margen', $r['totals']['margin'], 'money'),
             ],
+            // Valor del stock de hoy (no depende del periodo): la app lo pinta
+            // como su propio bloque.
+            'inventory' => $r['inventory'],
             'charts' => [
                 $this->topChart('Productos con más ingresos', $r['rows'], 'product'),
             ],

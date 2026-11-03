@@ -10,6 +10,8 @@
         ['route' => 'reports.products', 'icon' => 'bi-box-seam',       'color' => '#7c3aed', 'title' => 'Productos',  'text' => 'Rotación, margen estimado, stock bajo y producto parado.'],
         ['route' => 'reports.clients',  'icon' => 'bi-people',         'color' => '#e11d48', 'title' => 'Clientes',   'text' => 'Nuevos, recurrentes, los que más gastan y los perdidos.'],
         ['route' => 'reports.earnings', 'icon' => 'bi-cash-coin',      'color' => '#0f766e', 'title' => 'Ganancias',  'text' => 'De lo cobrado a lo que queda, descontando costo y comisiones.'],
+        ['route' => 'reports.analysis', 'icon' => 'bi-activity',       'color' => '#0891b2', 'title' => 'Análisis',   'text' => 'Semana y mes contra el anterior, tendencia y lo más vendido.'],
+        ['route' => 'reports.balance',  'icon' => 'bi-journal-text',   'color' => '#2563eb', 'title' => 'Balance',    'text' => 'Lo que entró y salió de caja y tesorería, y los cierres de caja.'],
     ];
 @endphp
 

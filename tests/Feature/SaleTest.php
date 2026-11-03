@@ -284,6 +284,135 @@ class SaleTest extends TestCase
 
     // ── Enlace con caja ─────────────────────────────────────────────────────
 
+    public function test_una_venta_rapida_no_mueve_stock_y_queda_sin_costo(): void
+    {
+        $company = $this->company();
+        $this->warehouse($company);
+        $this->openCash($company);
+        $product = $this->product($company, 60, 10);
+        $user = $this->userInCompany($company, ['sales.view', 'sales.create']);
+
+        $this->actingInCompany($user, $company)->post(route('sales.store'), [
+            'items' => [
+                ['type' => 'producto', 'id' => $product->id, 'quantity' => 1],
+                // Un producto que no está en el inventario: nombre y precio a mano.
+                ['type' => 'rapido', 'name' => 'gel fijador', 'price' => 25, 'quantity' => 2],
+            ],
+            'payments' => [['payment_method' => 'efectivo', 'amount' => 110]],
+        ])->assertRedirect();
+
+        $sale = Sale::allCompanies()->with('items')->firstOrFail();
+        $quick = $sale->items->firstWhere('product_id', null);
+
+        $this->assertSame('110.00', $sale->total);
+        $this->assertSame('GEL FIJADOR', $quick->description);
+        $this->assertNull($quick->unit_cost);
+        // Solo el producto con ficha descontó stock.
+        $this->assertSame(9.0, $product->totalStock());
+
+        // Sin nombre o sin precio, no.
+        $this->actingInCompany($user, $company)->post(route('sales.store'), [
+            'items' => [['type' => 'rapido', 'quantity' => 1]],
+            'payments' => [['payment_method' => 'efectivo', 'amount' => 10]],
+        ])->assertSessionHasErrors(['items.0.name', 'items.0.price']);
+    }
+
+    public function test_el_reporte_de_ganancias_separa_ventas_servicios_y_ventas_rapidas(): void
+    {
+        $company = $this->company(['pos', 'caja', 'inventario', 'agenda', 'estadisticas']);
+        $this->warehouse($company);
+        $this->openCash($company);
+        $product = $this->product($company, 60, 10);   // costo 30
+        $service = $this->service($company, 50);
+        $user = $this->userInCompany($company, ['sales.view', 'sales.create', 'reports.view']);
+
+        $this->actingInCompany($user, $company)->post(route('sales.store'), [
+            'items' => [
+                ['type' => 'producto', 'id' => $product->id, 'quantity' => 2],   // 120, costo 60
+                ['type' => 'servicio', 'id' => $service->id, 'quantity' => 1],   // 50
+                ['type' => 'rapido', 'name' => 'Gel', 'price' => 30, 'quantity' => 1],
+            ],
+            'payments' => [['payment_method' => 'efectivo', 'amount' => 200]],
+        ])->assertRedirect();
+
+        $period = new \App\Support\ReportPeriod(now()->toImmutable()->startOfDay(), now()->toImmutable()->endOfDay());
+        $report = fn (string $scope, bool $quick) => $this->inCompany($company, fn () => app(\App\Support\Reports\ProfitReport::class)->for($period, $scope, $quick));
+
+        $both = $report('ambos', false);
+        $this->assertSame(170.0, $both['summary']['revenue'], 'Sin la venta rápida.');
+        $this->assertSame(60.0, $both['products']['profit']);
+        $this->assertSame(50.0, $both['services']['profit']);
+        $this->assertSame(['revenue' => 30.0, 'count' => 1], $both['quick']);
+
+        $withQuick = $report('ambos', true);
+        $this->assertSame(200.0, $withQuick['summary']['revenue']);
+        $this->assertSame(140.0, $withQuick['summary']['profit']);
+
+        $this->assertSame(50.0, $report('servicios', false)['summary']['revenue']);
+        $this->assertSame(120.0, $report('ventas', false)['summary']['revenue']);
+
+        // La web y la app.
+        $this->actingInCompany($user, $company)->get(route('reports.earnings', ['scope' => 'ventas', 'quick' => 1]))
+            ->assertOk()->assertSee('Ganancia por lo vendido')->assertSee('Unir ventas rápidas');
+
+        \Laravel\Sanctum\Sanctum::actingAs($user);
+        $this->getJson('/api/v1/reports/profit?preset=hoy&quick=1', ['X-Company-Id' => (string) $company->id])
+            ->assertOk()
+            ->assertJsonPath('summary.revenue', 200.0)
+            ->assertJsonPath('include_quick', true)
+            ->assertJsonPath('sales.0.revenue', 200.0);
+    }
+
+    public function test_el_analisis_compara_con_el_mismo_tramo_y_el_inventario_se_valoriza(): void
+    {
+        $company = $this->company(['pos', 'caja', 'inventario', 'agenda', 'estadisticas']);
+        $this->warehouse($company);
+        $this->openCash($company);
+        $product = $this->product($company, 60, 10);   // costo 30, 10 en stock
+        $service = $this->service($company, 50);
+        $user = $this->userInCompany($company, ['sales.view', 'sales.create', 'reports.view']);
+
+        $this->actingInCompany($user, $company)->post(route('sales.store'), [
+            'items' => [
+                ['type' => 'producto', 'id' => $product->id, 'quantity' => 2],
+                ['type' => 'servicio', 'id' => $service->id, 'quantity' => 1],
+            ],
+            'payments' => [['payment_method' => 'efectivo', 'amount' => 170]],
+        ])->assertRedirect();
+
+        $r = $this->inCompany($company, fn () => app(\App\Support\Reports\AnalysisReport::class)->for());
+
+        $this->assertSame(50.0, $r['series']['servicios']['amount']['week']);
+        $this->assertSame(120.0, $r['series']['ventas']['amount']['month']);
+        $this->assertSame(2.0, $r['series']['ventas']['count']['week']);
+        $this->assertNull($r['series']['ventas']['amount']['week_change'], 'Sin nada antes, no hay %.');
+        $this->assertCount(7, $r['series']['servicios']['amount']['daily']);
+        $this->assertCount(8, $r['series']['servicios']['amount']['weeks']);
+        $this->assertCount(6, $r['series']['servicios']['amount']['months']);
+        $this->assertSame(120.0, collect($r['series']['ventas']['amount']['weeks'])->last()['value']);
+        $this->assertSame(50.0, $r['top']['services'][0]['amount']);
+        $this->assertSame(0.0, $r['series']['compras']['amount']['month']);
+
+        // Inventario: quedan 8 unidades, a costo 30 y venta 60.
+        $inv = $this->inCompany($company, fn () => app(\App\Support\Reports\ProductsReport::class)->inventory());
+        $this->assertSame(['products' => 1, 'units' => 8.0, 'cost' => 240.0, 'sale' => 480.0, 'potential' => 240.0], $inv);
+
+        foreach (['servicios', 'ventas', 'compras', 'top'] as $tab) {
+            $this->actingInCompany($user, $company)->get(route('reports.analysis', ['tab' => $tab, 'metric' => 'cantidad']))
+                ->assertOk()->assertSee('Análisis');
+        }
+        $this->actingInCompany($user, $company)->get(route('reports.products'))
+            ->assertOk()->assertSee('Ganancia potencial');
+
+        \Laravel\Sanctum\Sanctum::actingAs($user);
+        $this->getJson('/api/v1/reports/analysis', ['X-Company-Id' => (string) $company->id])
+            ->assertOk()
+            ->assertJsonPath('series.servicios.amount.week', 50.0);
+        $this->getJson('/api/v1/reports/productos?preset=hoy', ['X-Company-Id' => (string) $company->id])
+            ->assertOk()
+            ->assertJsonPath('inventory.potential', 240.0);
+    }
+
     public function test_la_venta_entra_en_el_turno_de_caja(): void
     {
         $company = $this->company();

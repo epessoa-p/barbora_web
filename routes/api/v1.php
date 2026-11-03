@@ -242,6 +242,17 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // ── Reportes (módulo de plan «estadisticas») ────────────────────────────
     // Reusan el mismo cálculo que la web; el móvil los pinta con una pantalla.
+    // Ganancias en detalle (Ambos / Ventas / Servicios, ventas rápidas).
+    Route::get('/reports/analysis', [ReportController::class, 'analysis'])
+        ->middleware(['plan:estadisticas', 'check-permission:reports.view'])
+        ->name('reports.analysis');
+    Route::get('/reports/balance', [ReportController::class, 'balance'])
+        ->middleware(['plan:estadisticas', 'check-permission:reports.view'])
+        ->name('reports.balance');
+    Route::get('/reports/profit', [ReportController::class, 'profit'])
+        ->middleware(['plan:estadisticas', 'check-permission:reports.view'])
+        ->name('reports.profit');
+
     Route::get('/reports/{type}', [ReportController::class, 'show'])
         ->middleware(['plan:estadisticas', 'check-permission:reports.view'])
         ->whereIn('type', array_keys(ReportController::TYPES))

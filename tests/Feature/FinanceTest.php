@@ -261,4 +261,68 @@ class FinanceTest extends TestCase
         $this->actingInCompany($user, $company)->get(route('accounts.index'))->assertForbidden();
         $this->actingInCompany($user, $company)->get(route('expenses.index'))->assertForbidden();
     }
+
+    public function test_el_balance_clasifica_caja_y_tesoreria_y_deja_aparte_el_capital(): void
+    {
+        $account = $this->account('CAPITAL', 1000);
+        $banco = $this->account('BANCO', 0);
+        $luz = $this->category('LUZ');
+        $session = $this->openSession(100);
+
+        // Tesorería: un retiro del dueño, una transferencia (no cuenta) y un gasto.
+        $this->act()->post(route('accounts.movements.store', $account), [
+            'type' => 'egreso', 'amount' => 50, 'concept' => 'Retiro', 'occurred_on' => now()->toDateString(),
+        ])->assertRedirect();
+        $this->act()->post(route('accounts.transfer', $account), [
+            'to_account_id' => $banco->id, 'amount' => 300, 'occurred_on' => now()->toDateString(),
+        ])->assertRedirect();
+        $this->act()->post(route('expenses.store'), [
+            'expense_category_id' => $luz->id, 'description' => 'Luz', 'amount' => 180,
+            'spent_on' => now()->toDateString(), 'source' => 'account', 'finance_account_id' => $account->id,
+        ])->assertRedirect();
+
+        // Caja: un gasto registrado, un egreso suelto y un ingreso suelto.
+        $this->act()->post(route('expenses.store'), [
+            'expense_category_id' => $luz->id, 'description' => 'Foco', 'amount' => 35,
+            'spent_on' => now()->toDateString(), 'source' => 'cash', 'cash_session_id' => $session->id,
+        ])->assertRedirect();
+        $session->movements()->create(['company_id' => $this->company->id, 'type' => 'egreso', 'payment_method' => 'efectivo', 'concept' => 'Taxi', 'amount' => 10]);
+        $session->movements()->create(['company_id' => $this->company->id, 'type' => 'ingreso', 'payment_method' => 'efectivo', 'concept' => 'Propina suelta', 'amount' => 40]);
+
+        $viewer = $this->userInCompany($this->company, ['reports.view'], 'reportes');
+
+        $r = $this->inCompany($this->company, fn () => app(\App\Support\Reports\BalanceReport::class)
+            ->for(\App\Support\ReportPeriod::fromRequest(request()->merge(['preset' => 'hoy'])), 'todo'));
+
+        $this->assertSame(40.0, $r['results']['income']['total']);
+        $this->assertSame(225.0, $r['results']['expense']['total']);
+        $this->assertSame(-185.0, $r['results']['profit']);
+        $this->assertSame(1000.0, $r['results']['capital']['contributions']);
+        $this->assertSame(50.0, $r['results']['capital']['withdrawals']);
+        $this->assertSame(['caja' => 45.0, 'tesoreria' => 180.0], $r['results']['expense']['by_source']);
+
+        $lines = collect($r['results']['expense']['lines'])->pluck('total', 'key')->all();
+        $this->assertSame(['gasto' => 215.0, 'gasto_operativo' => 10.0], $lines);
+
+        // Caja: lo que cuadra con el turno. El cierre lo refleja.
+        $caja = $this->inCompany($this->company, fn () => app(\App\Support\Reports\BalanceReport::class)
+            ->for(\App\Support\ReportPeriod::fromRequest(request()->merge(['preset' => 'hoy'])), 'caja'));
+        $this->assertSame(40.0, $caja['flow']['income']);
+        $this->assertSame(45.0, $caja['flow']['expense']);
+        $this->assertSame(3, $caja['flow']['count']);
+        $this->assertSame(95.0, $caja['closings'][0]['expected']);
+        $this->assertSame('abierta', $caja['closings'][0]['status']);
+
+        // La vista web y la API responden.
+        foreach (['resultados', 'movimientos', 'cierres'] as $tab) {
+            $this->actingInCompany($viewer, $this->company)
+                ->get(route('reports.balance', ['preset' => 'hoy', 'tab' => $tab, 'source' => 'todo']))
+                ->assertOk()->assertSee('Balance');
+        }
+        \Laravel\Sanctum\Sanctum::actingAs($viewer);
+        $this->getJson('/api/v1/reports/balance?preset=hoy&source=tesoreria&type=egreso', ['X-Company-Id' => (string) $this->company->id])
+            ->assertOk()
+            ->assertJsonPath('flow.expense', 230.0)
+            ->assertJsonPath('flow.count', 2);
+    }
 }

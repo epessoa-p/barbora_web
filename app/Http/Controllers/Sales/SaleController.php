@@ -106,8 +106,11 @@ class SaleController extends Controller
             'notes' => 'nullable|string',
 
             'items' => 'required|array|min:1',
-            'items.*.type' => ['required', Rule::in(['servicio', 'producto'])],
-            'items.*.id' => 'required|integer',
+            'items.*.type' => ['required', Rule::in(['servicio', 'producto', 'rapido'])],
+            'items.*.id' => 'required_unless:items.*.type,rapido|nullable|integer',
+            // Venta rápida: nombre y precio los escribe quien cobra.
+            'items.*.name' => 'required_if:items.*.type,rapido|nullable|string|max:255',
+            'items.*.price' => 'required_if:items.*.type,rapido|nullable|numeric|min:0.01',
             'items.*.quantity' => 'required|numeric|min:0.01',
 
             'payments' => 'required|array|min:1',

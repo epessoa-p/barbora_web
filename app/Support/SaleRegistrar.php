@@ -101,7 +101,8 @@ class SaleRegistrar
                 ]);
 
                 // Lo vendido sale del almacén. Los servicios no consumen stock.
-                if ($item['type'] === 'producto' && $warehouse) {
+                // (Una venta rápida no tiene ficha: no hay stock que descontar.)
+                if ($item['type'] === 'producto' && ! empty($item['product_id']) && $warehouse) {
                     $product = Product::withoutGlobalScopes()->findOrFail($item['product_id']);
 
                     if ($product->track_stock) {
@@ -316,7 +317,8 @@ class SaleRegistrar
     /** El almacén del que sale la mercancía. */
     protected function resolveWarehouse(Company $company, array $items, ?int $branchId): ?Warehouse
     {
-        $hasProducts = collect($items)->contains(fn (array $i) => $i['type'] === 'producto');
+        // Solo los productos con ficha: las ventas rápidas no salen de ningún almacén.
+        $hasProducts = collect($items)->contains(fn (array $i) => $i['type'] === 'producto' && ! empty($i['product_id']));
 
         if (! $hasProducts || ! $company->planAllows('inventario')) {
             return null;

@@ -14,8 +14,8 @@
 <div class="alert alert-info py-2 small d-flex gap-2 align-items-start d-print-none">
     <i class="bi bi-info-circle mt-1"></i>
     <span>
-        Es una cifra de gestión, no contabilidad: no se descuentan alquiler, sueldos
-        fijos ni servicios.
+        Es una cifra de gestión, no contabilidad: resta el costo de lo vendido, las
+        comisiones y los gastos registrados (alquiler, luz, sueldos…).
         @if($earnings['estimated'])
             Además, algunas ventas son anteriores a que se guardara el precio de compra,
             así que su costo se estima con el actual.
@@ -134,4 +134,5 @@
         </div>
     </div>
 </div>
+@include('reports.partials.profit', ['profit' => $profit])
 @endsection

@@ -37,6 +37,35 @@
     @endforeach
 </div>
 
+{{-- Valor del inventario: foto del stock de hoy, no depende del periodo. --}}
+@php $inv = $inventory; @endphp
+<h6 class="fw-bold mb-2">Inventario actual <span class="text-muted small fw-normal">· stock de hoy, no depende del periodo</span></h6>
+<div class="row g-3 mb-4">
+    @foreach([
+        ['bi-archive', 'Productos', $inv['products'], ''],
+        ['bi-stack', 'Unidades', rtrim(rtrim(number_format($inv['units'], 2, '.', ','), '0'), '.'), ''],
+        ['bi-receipt', 'Valor a costo', \App\Support\Money::format($inv['cost'], $tenantCompany), ''],
+        ['bi-tag', 'Valor a venta', \App\Support\Money::format($inv['sale'], $tenantCompany), 'text-success'],
+    ] as [$icon, $label, $value, $class])
+        <div class="col-6 col-lg">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body py-3">
+                    <p class="text-muted small text-uppercase mb-1"><i class="bi {{ $icon }}"></i> {{ $label }}</p>
+                    <p class="h5 fw-bold mb-0 {{ $class }}">{{ $value }}</p>
+                </div>
+            </div>
+        </div>
+    @endforeach
+    <div class="col-12 col-lg">
+        <div class="card border-0 shadow-sm h-100 text-white" style="background: #1f2937">
+            <div class="card-body py-3">
+                <p class="small text-uppercase mb-1 opacity-75"><i class="bi bi-graph-up-arrow"></i> Ganancia potencial</p>
+                <p class="h5 fw-bold mb-0">{{ \App\Support\Money::format($inv['potential'], $tenantCompany) }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="card border-0 shadow-sm mb-4">
     <div class="card-body p-0">
         <div class="p-3 border-bottom"><h6 class="fw-bold mb-0">Lo que más rota</h6></div>

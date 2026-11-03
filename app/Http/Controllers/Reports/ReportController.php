@@ -5,12 +5,16 @@ namespace App\Http\Controllers\Reports;
 use App\Http\Controllers\Controller;
 use App\Models\Branch;
 use App\Support\ReportPeriod;
+use App\Support\Reports\AnalysisReport;
+use App\Support\Reports\BalanceReport;
 use App\Support\Reports\ClientsReport;
 use App\Support\Reports\EarningsReport;
 use App\Support\Reports\ProductsReport;
+use App\Support\Reports\ProfitReport;
 use App\Support\Reports\SalesReport;
 use App\Support\Reports\ServicesReport;
 use App\Support\Reports\StaffReport;
+use App\Support\Tenancy;
 use Illuminate\Http\Request;
 
 /**
@@ -71,7 +75,50 @@ class ReportController extends Controller
     {
         $period = ReportPeriod::fromRequest($request);
 
-        return view('reports.earnings', $this->common($period) + ['earnings' => $report->for($period)]);
+        return view('reports.earnings', $this->common($period) + [
+            'earnings' => $report->for($period),
+            // Ganancia por lo vendido: Ambos / Ventas / Servicios, y si se unen
+            // las ventas rápidas (sin costo conocido).
+            'profit' => app(ProfitReport::class)->for($period, (string) $request->query('scope', 'ambos'), $request->boolean('quick')),
+        ]);
+    }
+
+    /** Balance del dinero: Resultados, Movimientos (caja/tesorería) y Cierres de caja. */
+    public function balance(Request $request, BalanceReport $report)
+    {
+        $period = ReportPeriod::fromRequest($request);
+        $tab = in_array($request->query('tab'), ['movimientos', 'cierres'], true) ? $request->query('tab') : 'resultados';
+
+        return view('reports.balance', $this->common($period) + [
+            'tab' => $tab,
+            'balance' => $report->for($period, (string) $request->query('source', 'caja'), $request->query('type')),
+        ]);
+    }
+
+    /**
+     * Análisis: semana y mes contra el anterior, por día, por semana y por
+     * mes; Servicios / Ventas / Compras / Top, en monto o cantidad.
+     */
+    public function analysis(Request $request, AnalysisReport $report)
+    {
+        $period = ReportPeriod::fromRequest($request);
+        // Compras es del módulo «inventario»: sin él, no hay pestaña.
+        $withPurchases = (bool) app(Tenancy::class)->company()?->planAllows('inventario');
+
+        $tabs = array_keys(AnalysisReport::SERIES);
+        if (! $withPurchases) {
+            $tabs = array_diff($tabs, ['compras']);
+        }
+        $tabs[] = 'top';
+
+        $tab = in_array($request->query('tab'), $tabs, true) ? $request->query('tab') : 'servicios';
+
+        return view('reports.analysis', $this->common($period) + [
+            'tab' => $tab,
+            'tabs' => array_values($tabs),
+            'metric' => $request->query('metric') === 'cantidad' ? 'count' : 'amount',
+            'analysis' => $report->for($period->branchId, $withPurchases),
+        ]);
     }
 
     /** Lo que necesitan todas las vistas: el periodo y la barra de filtros. */

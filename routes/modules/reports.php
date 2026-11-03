@@ -29,6 +29,8 @@ Route::middleware(['plan:estadisticas', 'check-permission:reports.view'])
         Route::get('/productos', [ReportController::class, 'products'])->name('products');
         Route::get('/clientes', [ReportController::class, 'clients'])->name('clients');
         Route::get('/ganancias', [ReportController::class, 'earnings'])->name('earnings');
+        Route::get('/balance', [ReportController::class, 'balance'])->name('balance');
+        Route::get('/analisis', [ReportController::class, 'analysis'])->name('analysis');
 
         Route::get('/{report}/exportar', ExportController::class)
             ->middleware('check-permission:reports.export')

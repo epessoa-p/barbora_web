@@ -19,6 +19,7 @@ class ReportPeriod
     public const PRESETS = [
         'hoy' => 'Hoy',
         'semana' => 'Esta semana',
+        'semana_pasada' => 'Semana anterior',
         'mes' => 'Este mes',
         'mes_pasado' => 'Mes pasado',
         'anio' => 'Este año',
@@ -68,6 +69,10 @@ class ReportPeriod
         return match ($key) {
             'hoy' => [$now->startOfDay(), $now->endOfDay()],
             'semana' => [$now->startOfWeek()->startOfDay(), $now->endOfWeek()->endOfDay()],
+            'semana_pasada' => [
+                $now->subWeek()->startOfWeek()->startOfDay(),
+                $now->subWeek()->endOfWeek()->endOfDay(),
+            ],
             'mes' => [$now->startOfMonth()->startOfDay(), $now->endOfMonth()->endOfDay()],
             'mes_pasado' => [
                 $now->subMonthNoOverflow()->startOfMonth()->startOfDay(),

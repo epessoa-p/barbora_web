@@ -34,6 +34,21 @@ class SaleItemResolver
         $products = Product::whereIn('id', $productIds)->get()->keyBy('id');
 
         return collect($rows)->map(function (array $row) use ($services, $products, $defaultPersonalId) {
+            // Venta rápida: un producto que no está en el inventario (se tiene,
+            // pero registrarlo llevaría tiempo). Es la única línea cuyo precio
+            // escribe quien cobra; no mueve stock y su costo es desconocido.
+            if ($row['type'] === 'rapido') {
+                return [
+                    'type' => 'producto',
+                    'product_id' => null,
+                    'personal_id' => $row['personal_id'] ?? $defaultPersonalId,
+                    'description' => mb_strtoupper(trim((string) $row['name'])),
+                    'quantity' => (float) $row['quantity'],
+                    'unit_price' => round((float) $row['price'], 2),
+                    'unit_cost' => null,
+                ];
+            }
+
             if ($row['type'] === 'servicio') {
                 $service = $services->get($row['id']);
 
