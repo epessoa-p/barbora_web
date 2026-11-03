@@ -89,6 +89,17 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/services/{service}/photo', [CatalogController::class, 'updateServicePhoto'])
             ->middleware('check-permission:services.edit')->name('services.photo');
 
+        // La galería del servicio: varias fotos de cortes, con su comentario.
+        // La primera es la portada.
+        Route::post('/services/{service}/photos', [CatalogController::class, 'storeServicePhotos'])
+            ->middleware('check-permission:services.edit')->name('services.photos.store');
+        Route::put('/services/{service}/photos/order', [CatalogController::class, 'reorderServicePhotos'])
+            ->middleware('check-permission:services.edit')->name('services.photos.order');
+        Route::patch('/services/{service}/photos/{photo}', [CatalogController::class, 'updateServicePhotoCaption'])
+            ->middleware('check-permission:services.edit')->name('services.photos.update');
+        Route::delete('/services/{service}/photos/{photo}', [CatalogController::class, 'destroyServicePhoto'])
+            ->middleware('check-permission:services.edit')->name('services.photos.destroy');
+
         // Reservar: barberos, huecos libres y alta de la cita. Las reglas son
         // las de la web (App\Support\AppointmentBooker).
         Route::get('/staff', [BookingController::class, 'staff'])

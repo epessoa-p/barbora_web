@@ -7,6 +7,7 @@ use App\Models\Concerns\HasPhoto;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Service extends Model
@@ -32,6 +33,12 @@ class Service extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(ServiceCategory::class, 'service_category_id');
+    }
+
+    /** La galería: los cortes, con su comentario. La primera es la portada. */
+    public function photos(): HasMany
+    {
+        return $this->hasMany(ServicePhoto::class)->orderBy('sort_order')->orderBy('id');
     }
 
     /** Duración legible: «45 min», «1 h 15 min». */

@@ -6,13 +6,18 @@ use App\Http\Controllers\Controller;
 use App\Models\Service;
 use App\Models\ServiceCategory;
 use App\Support\ServiceForm;
+use App\Support\ServiceGallery;
 use Illuminate\Http\Request;
 
 class ServiceController extends Controller
 {
+    public function __construct(protected ServiceGallery $gallery)
+    {
+    }
+
     public function index(Request $request)
     {
-        $query = Service::with('category')->orderBy('sort_order')->orderBy('name');
+        $query = Service::with('category')->withCount('photos')->orderBy('sort_order')->orderBy('name');
 
         if ($categoryId = $request->integer('category')) {
             $query->where('service_category_id', $categoryId);
@@ -38,9 +43,9 @@ class ServiceController extends Controller
 
     public function store(Request $request)
     {
-        $request->validate(Service::PHOTO_RULES, Service::PHOTO_MESSAGES);
+        $request->validate(ServiceGallery::RULES + Service::PHOTO_RULES, ServiceGallery::MESSAGES + Service::PHOTO_MESSAGES);
         $service = Service::create($this->validated($request));
-        $service->syncPhoto($request);
+        $this->gallery->apply($service, $request);
 
         return redirect()->route('services.index')
             ->with('success', "Servicio «{$service->name}» creado exitosamente.");
@@ -49,16 +54,16 @@ class ServiceController extends Controller
     public function edit(Service $service)
     {
         return view('services.edit', [
-            'service' => $service,
+            'service' => $service->load('photos'),
             'categories' => $this->categories(),
         ]);
     }
 
     public function update(Request $request, Service $service)
     {
-        $request->validate(Service::PHOTO_RULES, Service::PHOTO_MESSAGES);
+        $request->validate(ServiceGallery::RULES + Service::PHOTO_RULES, ServiceGallery::MESSAGES + Service::PHOTO_MESSAGES);
         $service->update($this->validated($request, $service));
-        $service->syncPhoto($request);
+        $this->gallery->apply($service, $request);
 
         return redirect()->route('services.index')
             ->with('success', 'Servicio actualizado exitosamente.');

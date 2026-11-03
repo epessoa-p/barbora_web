@@ -64,7 +64,9 @@
                                         <img src="{{ $service->photoUrl() }}" alt="" class="rounded" style="width: 40px; height: 40px; object-fit: cover">
                                     @endif
                                     <div>
-                                        <div class="fw-semibold">{{ $service->name }}</div>
+                                        <div class="fw-semibold">{{ $service->name }}
+                                            @if($service->photos_count > 1)<span class="badge bg-light text-muted border fw-normal ms-1"><i class="bi bi-images"></i> {{ $service->photos_count }}</span>@endif
+                                        </div>
                                         @if($service->description)
                                             <small class="text-muted">{{ $service->description }}</small>
                                         @endif

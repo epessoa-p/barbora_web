@@ -64,7 +64,7 @@ class Catalog
      */
     public static function services(Company $company): Collection
     {
-        return app(Tenancy::class)->runFor($company->id, fn () => Service::with('category')
+        return app(Tenancy::class)->runFor($company->id, fn () => Service::with('category', 'photos')
             ->where('active', true)
             ->orderBy('sort_order')
             ->orderBy('name')

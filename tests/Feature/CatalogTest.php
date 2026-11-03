@@ -169,12 +169,14 @@ class CatalogTest extends TestCase
 
         $this->actingInCompany($user, $company)->get(route('services.index'))->assertOk()->assertSee($service->photoUrl());
 
-        // Cambiarla borra la anterior.
+        // Quitarla y subir otra: el archivo viejo se borra y cambia la portada.
         $this->actingInCompany($user, $company)->put(route('services.update', $service), [
             'name' => 'CORTE CLÁSICO', 'duration_minutes' => 30, 'price' => 50, 'active' => 1,
-            'photo' => \Illuminate\Http\UploadedFile::fake()->image('nuevo.png', 300, 300),
+            'remove_photos' => [$service->photos()->value('id')],
+            'photos' => [\Illuminate\Http\UploadedFile::fake()->image('nuevo.png', 300, 300)],
         ])->assertRedirect();
         \Illuminate\Support\Facades\Storage::disk('public')->assertMissing($first);
+        $this->assertNotSame($first, $service->refresh()->photo);
 
         // Sale en el catálogo público.
         $company->update(['catalog_enabled' => true]);
@@ -207,6 +209,74 @@ class CatalogTest extends TestCase
         $this->post("/api/v1/services/{$service->id}/photo", ['remove_photo' => 1], $headers)
             ->assertOk()->assertJsonPath('data.photo_url', null);
         $this->assertNull($service->refresh()->photo);
+    }
+
+    public function test_la_galeria_del_servicio_ordena_comenta_y_sale_en_el_catalogo(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('public');
+        $company = $this->companyWithPlan();
+        $user = $this->userInCompany($company, ['services.view', 'services.create', 'services.edit']);
+        $img = fn (string $name) => \Illuminate\Http\UploadedFile::fake()->image($name, 300, 300);
+        $base = ['name' => 'CORTE MODERNO', 'duration_minutes' => 40, 'price' => 60, 'active' => 1];
+
+        // Varias fotos de una vez, cada una con su comentario.
+        $this->actingInCompany($user, $company)->post(route('services.store'), $base + [
+            'photos' => [$img('a.jpg'), $img('b.jpg'), $img('c.jpg')],
+            'new_captions' => ['1', 'Corte XXTT', ''],
+        ])->assertRedirect();
+
+        $service = Service::allCompanies()->firstOrFail();
+        [$a, $b, $c] = $service->photos()->get()->all();
+        $this->assertSame(['1', 'Corte XXTT', null], [$a->caption, $b->caption, $c->caption]);
+        $this->assertSame($a->path, $service->photo, 'La primera es la portada.');
+
+        $this->actingInCompany($user, $company)->get(route('services.edit', $service))
+            ->assertOk()->assertSee('Fotos de cortes')->assertSee('Corte XXTT');
+
+        // Reordenar (la tercera primero), comentar y quitar una.
+        $this->actingInCompany($user, $company)->put(route('services.update', $service), $base + [
+            'order' => [$c->id, $a->id, $b->id],
+            'captions' => [$c->id => 'Nuevo 3', $a->id => '1'],
+            'remove_photos' => [$b->id],
+        ])->assertRedirect();
+
+        $this->assertSame([$c->id, $a->id], $service->photos()->pluck('id')->all());
+        $this->assertSame($c->path, $service->refresh()->photo);
+        \Illuminate\Support\Facades\Storage::disk('public')->assertMissing($b->path);
+
+        // El catálogo público muestra todas, con su comentario.
+        $company->update(['catalog_enabled' => true]);
+        $this->get(route('catalog.public', \App\Support\Catalog::token($company)))
+            ->assertOk()->assertSee('Nuevo 3')->assertSee($a->refresh()->url());
+
+        // La app: subir, comentar, ordenar y quitar.
+        \Laravel\Sanctum\Sanctum::actingAs($user);
+        $headers = ['X-Company-Id' => (string) $company->id, 'Accept' => 'application/json'];
+
+        $this->post("/api/v1/services/{$service->id}/photos", ['photos' => [$img('d.jpg')], 'captions' => ['Desde la app']], $headers)
+            ->assertCreated()->assertJsonCount(3, 'data.photos')->assertJsonPath('data.photos.2.caption', 'Desde la app');
+        $d = $service->photos()->get()->last();
+
+        $this->patchJson("/api/v1/services/{$service->id}/photos/{$d->id}", ['caption' => 'Editado'], $headers)
+            ->assertOk()->assertJsonPath('data.photos.2.caption', 'Editado');
+        $this->putJson("/api/v1/services/{$service->id}/photos/order", ['ids' => [$d->id]], $headers)
+            ->assertOk()->assertJsonPath('data.photos.0.id', $d->id);
+        $this->assertSame($d->path, $service->refresh()->photo);
+
+        $this->deleteJson("/api/v1/services/{$service->id}/photos/{$d->id}", [], $headers)
+            ->assertOk()->assertJsonCount(2, 'data.photos');
+        $this->assertSame($c->path, $service->refresh()->photo);
+
+        // Una foto de otro servicio no se toca por esta ruta.
+        $other = Service::factory()->create(['company_id' => $company->id]);
+        $this->deleteJson("/api/v1/services/{$other->id}/photos/{$c->id}", [], $headers)->assertNotFound();
+
+        // Tope de fotos.
+        \App\Models\ServicePhoto::withoutGlobalScopes()->insert(array_map(fn ($i) => [
+            'company_id' => $company->id, 'service_id' => $service->id, 'path' => "x/{$i}.jpg", 'sort_order' => 10 + $i,
+        ], range(1, \App\Support\ServiceGallery::MAX - 2)));
+        $this->post("/api/v1/services/{$service->id}/photos", ['photos' => [$img('e.jpg')]], $headers)
+            ->assertStatus(422)->assertJsonValidationErrors('photos');
     }
 
     public function test_se_registra_un_cliente(): void

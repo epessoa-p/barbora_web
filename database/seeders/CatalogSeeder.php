@@ -44,6 +44,7 @@ class CatalogSeeder extends Seeder
 
             $services = [
                 ['Corte clásico',        'Corte', 30,  50.00, 'Lavado, corte y peinado'],
+                ['Corte moderno',        'Corte', 40,  60.00, 'Degradados, diseños y texturas'],
                 ['Corte + barba',        'Corte', 50,  80.00, 'El combo de siempre'],
                 ['Corte infantil',       'Corte', 25,  40.00, 'Hasta 12 años'],
                 ['Perfilado de barba',   'Barba', 20,  35.00, 'Navaja y toalla caliente'],

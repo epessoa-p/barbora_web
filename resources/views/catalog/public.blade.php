@@ -39,6 +39,21 @@
         .actions .btn { border-radius: 999px; }
         footer { color: var(--muted); font-size: .8rem; }
 
+        /* Los cortes de cada servicio: una fila que se desliza, y el visor. */
+        .item { flex-wrap: wrap; }
+        .cuts { flex-basis: 100%; display: flex; gap: .5rem; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: .25rem; -webkit-overflow-scrolling: touch; }
+        .cut { flex: 0 0 auto; width: 92px; padding: 0; border: 0; background: none; text-align: left; scroll-snap-align: start; }
+        .cut img { width: 92px; height: 92px; border-radius: 12px; object-fit: cover; background: var(--canvas); display: block; }
+        .cut span { display: block; font-size: .75rem; color: var(--muted); margin-top: .2rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .viewer { position: fixed; inset: 0; background: rgba(0,0,0,.92); z-index: 1050; display: none; flex-direction: column; align-items: center; justify-content: center; padding: 1rem; color: #fff; }
+        .viewer.open { display: flex; }
+        .viewer img { max-width: 100%; max-height: 72vh; border-radius: 12px; object-fit: contain; }
+        .viewer .caption { margin-top: .8rem; font-weight: 600; text-align: center; }
+        .viewer .counter { color: rgba(255,255,255,.6); font-size: .85rem; }
+        .viewer button { background: rgba(255,255,255,.12); border: 0; color: #fff; border-radius: 50%; width: 44px; height: 44px; font-size: 1.3rem; }
+        .viewer .close { position: absolute; top: 1rem; right: 1rem; }
+        .viewer .nav { display: flex; gap: 1.5rem; margin-top: 1rem; }
+
         /* «Descargar PDF»: el navegador lo guarda con este diseño. */
         @media print {
             @page { margin: 14mm; }
@@ -101,6 +116,19 @@
                             </div>
                         </div>
                         <div class="item-price">{{ $money($service->price) }}</div>
+
+                        {{-- Los cortes del servicio: se deslizan; al tocar, se ven en grande. --}}
+                        @if($service->photos->count() > 1 || $service->photos->first()?->caption)
+                            <div class="cuts no-print">
+                                @foreach($service->photos as $photo)
+                                    <button type="button" class="cut" data-group="s{{ $service->id }}"
+                                            data-src="{{ $photo->url() }}" data-caption="{{ $photo->caption }}" data-title="{{ $service->name }}">
+                                        <img src="{{ $photo->url() }}" alt="{{ $photo->caption ?: $service->name }}" loading="lazy">
+                                        @if($photo->caption)<span>{{ $photo->caption }}</span>@endif
+                                    </button>
+                                @endforeach
+                            </div>
+                        @endif
                     </div>
                 @endforeach
             </div>
@@ -137,7 +165,60 @@
         </footer>
     </main>
 
+    <div class="viewer no-print" id="viewer" role="dialog" aria-modal="true">
+        <button type="button" class="close" aria-label="Cerrar"><i class="bi bi-x-lg"></i></button>
+        <div class="counter mb-2"></div>
+        <img alt="">
+        <div class="caption"></div>
+        <div class="nav">
+            <button type="button" class="prev" aria-label="Anterior"><i class="bi bi-chevron-left"></i></button>
+            <button type="button" class="next" aria-label="Siguiente"><i class="bi bi-chevron-right"></i></button>
+        </div>
+    </div>
+
     <script>
+    // Visor de los cortes: la foto en grande con su comentario; las flechas
+    // (o deslizar) pasan entre las fotos del mismo servicio.
+    (function () {
+        const viewer = document.getElementById('viewer');
+        const img = viewer.querySelector('img');
+        let list = [], index = 0, startX = null;
+
+        const show = () => {
+            const cut = list[index];
+            img.src = cut.dataset.src;
+            viewer.querySelector('.caption').textContent = cut.dataset.caption || cut.dataset.title;
+            viewer.querySelector('.counter').textContent = list.length > 1 ? (index + 1) + ' / ' + list.length : '';
+            viewer.querySelector('.nav').style.visibility = list.length > 1 ? 'visible' : 'hidden';
+        };
+        const move = step => { index = (index + step + list.length) % list.length; show(); };
+        const close = () => viewer.classList.remove('open');
+
+        document.querySelectorAll('.cut').forEach(cut => cut.addEventListener('click', () => {
+            list = Array.from(document.querySelectorAll('.cut[data-group="' + cut.dataset.group + '"]'));
+            index = list.indexOf(cut);
+            show();
+            viewer.classList.add('open');
+        }));
+        viewer.querySelector('.close').addEventListener('click', close);
+        viewer.querySelector('.prev').addEventListener('click', () => move(-1));
+        viewer.querySelector('.next').addEventListener('click', () => move(1));
+        viewer.addEventListener('click', e => { if (e.target === viewer) close(); });
+        document.addEventListener('keydown', e => {
+            if (!viewer.classList.contains('open')) return;
+            if (e.key === 'Escape') close();
+            if (e.key === 'ArrowLeft') move(-1);
+            if (e.key === 'ArrowRight') move(1);
+        });
+        viewer.addEventListener('touchstart', e => { startX = e.touches[0].clientX; }, { passive: true });
+        viewer.addEventListener('touchend', e => {
+            if (startX === null) return;
+            const dx = e.changedTouches[0].clientX - startX;
+            if (Math.abs(dx) > 40) move(dx < 0 ? 1 : -1);
+            startX = null;
+        });
+    })();
+
     // Compartir: el menú nativo del teléfono; si no hay, se copia el enlace.
     document.getElementById('share').addEventListener('click', async function () {
         const data = { title: @json($company->name), text: 'Nuestros servicios y precios', url: @json($url) };

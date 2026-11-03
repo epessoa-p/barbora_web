@@ -9,9 +9,11 @@ use App\Models\Client;
 use App\Models\Product;
 use App\Models\Service;
 use App\Models\ServiceCategory;
+use App\Models\ServicePhoto;
 use App\Support\ClientForm;
 use App\Support\ServiceCategoryForm;
 use App\Support\ServiceForm;
+use App\Support\ServiceGallery;
 use App\Support\ShopTime;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -26,7 +28,7 @@ class CatalogController extends ApiController
 {
     public function services(Request $request): JsonResponse
     {
-        $services = Service::with('category')
+        $services = Service::with('category', 'photos')
             ->when(! $request->boolean('all'), fn ($q) => $q->where('active', true))
             ->orderBy('sort_order')
             ->orderBy('name')
@@ -105,18 +107,74 @@ class CatalogController extends ApiController
             ['photo.required_without' => 'Elige una imagen.'] + Service::PHOTO_MESSAGES,
         );
 
-        $service->syncPhoto($request);
+        // Apps viejas: la «foto» es la portada, la primera de la galería.
+        app(ServiceGallery::class)->replaceCover($service, $request->boolean('remove_photo') ? null : $request->file('photo'));
 
         return $this->json([
             'message' => $service->photo ? 'Foto actualizada.' : 'Foto quitada.',
-            'data' => (new ServiceResource($service->load('category')))->resolve(),
+            'data' => (new ServiceResource($service->load('category', 'photos')))->resolve(),
         ]);
+    }
+
+    /* ── Galería del servicio (los cortes, con su comentario) ─────────────── */
+
+    /** Sube una o varias fotos al final (multipart: photos[] y captions[]). */
+    public function storeServicePhotos(Request $request, Service $service, ServiceGallery $gallery): JsonResponse
+    {
+        $request->validate([
+            'photos' => ['required', 'array', 'min:1', 'max:'.ServiceGallery::MAX],
+            'photos.*' => ServiceGallery::FILE_RULES,
+            'captions' => ['nullable', 'array'],
+            'captions.*' => ['nullable', 'string', 'max:120'],
+        ], ['photos.required' => 'Elige al menos una foto.'] + ServiceGallery::MESSAGES);
+
+        $gallery->add($service, $request->file('photos'), array_values((array) $request->input('captions', [])));
+
+        return $this->servicePhotosResponse($service, 'Fotos agregadas.', 201);
+    }
+
+    /** Cambia el comentario de una foto. */
+    public function updateServicePhotoCaption(Request $request, Service $service, ServicePhoto $photo, ServiceGallery $gallery): JsonResponse
+    {
+        abort_unless($photo->service_id === $service->id, 404);
+        $data = $request->validate(['caption' => ['nullable', 'string', 'max:120']]);
+
+        $gallery->caption($photo, $data['caption'] ?? null);
+
+        return $this->servicePhotosResponse($service, 'Comentario guardado.');
+    }
+
+    /** Nuevo orden (ids): la primera es la portada. */
+    public function reorderServicePhotos(Request $request, Service $service, ServiceGallery $gallery): JsonResponse
+    {
+        $data = $request->validate(['ids' => ['required', 'array'], 'ids.*' => ['integer']]);
+
+        $gallery->reorder($service, $data['ids']);
+
+        return $this->servicePhotosResponse($service, 'Orden guardado.');
+    }
+
+    public function destroyServicePhoto(Service $service, ServicePhoto $photo, ServiceGallery $gallery): JsonResponse
+    {
+        abort_unless($photo->service_id === $service->id, 404);
+
+        $gallery->remove($photo);
+
+        return $this->servicePhotosResponse($service, 'Foto quitada.');
+    }
+
+    protected function servicePhotosResponse(Service $service, string $message, int $status = 200): JsonResponse
+    {
+        return $this->json([
+            'message' => $message,
+            'data' => (new ServiceResource($service->refresh()->load('category', 'photos')))->resolve(),
+        ], $status);
     }
 
     public function updateService(Request $request, Service $service, ServiceForm $form): JsonResponse
     {
         $service->update($form->validate($request, $service->company_id, $service));
-        $service->load('category');
+        $service->load('category', 'photos');
 
         return $this->json([
             'message' => 'Servicio actualizado.',
@@ -130,7 +188,7 @@ class CatalogController extends ApiController
         $companyId = $request->attributes->get('tenant_company')->id;
 
         $service = Service::create($form->validate($request, $companyId) + ['company_id' => $companyId]);
-        $service->load('category');
+        $service->load('category', 'photos');
 
         return $this->json([
             'message' => "Servicio «{$service->name}» creado.",
