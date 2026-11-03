@@ -29,7 +29,18 @@ class SaleController extends Controller
 
     public function index(Request $request)
     {
-        $query = Sale::with(['branch', 'client', 'personal', 'payments'])->latest('sold_at');
+        $query = Sale::with(['branch', 'client', 'personal', 'payments'])
+            // Para el distintivo «Servicio» / «Producto» de cada venta.
+            ->withCount([
+                'items as services_count' => fn ($q) => $q->where('type', 'servicio'),
+                'items as products_count' => fn ($q) => $q->where('type', 'producto'),
+            ])
+            ->latest('sold_at');
+
+        // Solo las que llevaron servicios, o productos.
+        if (in_array($kind = $request->query('kind'), ['servicio', 'producto'], true)) {
+            $query->whereHas('items', fn ($q) => $q->where('type', $kind));
+        }
 
         if ($from = $request->query('from')) {
             $query->whereDate('sold_at', '>=', $from);

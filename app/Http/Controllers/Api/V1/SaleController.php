@@ -108,6 +108,11 @@ class SaleController extends ApiController
             ->when($request->query('status'), fn ($q, $status) => $q->where('status', $status));
 
         $sales = (clone $query)->with(['client', 'personal', 'payments'])
+            // Para el distintivo de la lista: si llevó servicios, productos o ambos.
+            ->withCount([
+                'items as services_count' => fn ($q) => $q->where('type', 'servicio'),
+                'items as products_count' => fn ($q) => $q->where('type', 'producto'),
+            ])
             ->latest('sold_at')
             ->limit(min((int) $request->query('limit', 100), 200))
             ->get();
@@ -134,6 +139,9 @@ class SaleController extends ApiController
                 'client' => $sale->client?->full_name,
                 'personal' => $sale->personal?->full_name,
                 'methods' => $sale->payments->map->methodLabel()->unique()->values()->all(),
+                // Cuántas líneas de cada tipo: la app marca «Servicio» / «Producto».
+                'services' => (int) $sale->services_count,
+                'products' => (int) $sale->products_count,
             ])->all(),
         ]);
     }

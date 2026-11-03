@@ -73,9 +73,16 @@
             @endforeach
         </select>
     </div>
+    <div class="col-md-2">
+        <select name="kind" class="form-select">
+            <option value="">Servicios y productos</option>
+            <option value="servicio" {{ request('kind') === 'servicio' ? 'selected' : '' }}>Con servicios</option>
+            <option value="producto" {{ request('kind') === 'producto' ? 'selected' : '' }}>Con productos</option>
+        </select>
+    </div>
     <div class="col-md-2 d-flex gap-2">
         <button class="btn btn-outline-secondary flex-fill"><i class="bi bi-funnel"></i></button>
-        @if(request()->hasAny(['from', 'to', 'branch', 'personal', 'status']))
+        @if(request()->hasAny(['from', 'to', 'branch', 'personal', 'status', 'kind']))
             <a href="{{ route('sales.index') }}" class="btn btn-light border">Limpiar</a>
         @endif
     </div>
@@ -102,6 +109,13 @@
                         <tr class="{{ $sale->isCancelled() ? 'opacity-50' : '' }}">
                             <td class="ps-3">
                                 <code>{{ $sale->number }}</code>
+                                {{-- Qué se cobró: servicio, producto o ambos. --}}
+                                @if($sale->services_count)
+                                    <span class="badge rounded-pill bg-info-subtle text-info-emphasis fw-semibold"><i class="bi bi-scissors"></i> Servicio</span>
+                                @endif
+                                @if($sale->products_count)
+                                    <span class="badge rounded-pill bg-primary-subtle text-primary-emphasis fw-semibold"><i class="bi bi-box-seam"></i> Producto</span>
+                                @endif
                                 {{-- El número se repite entre sucursales: la sucursal lo completa. --}}
                                 @if($branches->count() > 1 && $sale->branch)
                                     <small class="text-muted d-block">{{ $sale->branch->name }}</small>
@@ -135,7 +149,7 @@
                     @empty
                         <tr>
                             <td colspan="8" class="text-center py-5 text-muted">
-                                @if(request()->hasAny(['from', 'to', 'branch', 'personal', 'status']))
+                                @if(request()->hasAny(['from', 'to', 'branch', 'personal', 'status', 'kind']))
                                     Ninguna venta coincide con el filtro.
                                 @else
                                     Todavía no hay ventas registradas.

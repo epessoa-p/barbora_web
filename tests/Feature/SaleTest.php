@@ -413,6 +413,35 @@ class SaleTest extends TestCase
             ->assertJsonPath('inventory.potential', 240.0);
     }
 
+    public function test_la_lista_de_ventas_distingue_servicios_de_productos(): void
+    {
+        $company = $this->company(['pos', 'caja', 'inventario', 'agenda']);
+        $this->warehouse($company);
+        $this->openCash($company);
+        $product = $this->product($company, 60, 10);
+        $service = $this->service($company, 50);
+        $user = $this->userInCompany($company, ['sales.view', 'sales.create']);
+
+        foreach ([['servicio', $service->id, 50], ['producto', $product->id, 60]] as [$type, $id, $amount]) {
+            $this->actingInCompany($user, $company)->post(route('sales.store'), [
+                'items' => [['type' => $type, 'id' => $id, 'quantity' => 1]],
+                'payments' => [['payment_method' => 'efectivo', 'amount' => $amount]],
+            ])->assertRedirect();
+        }
+        [$serviceSale, $productSale] = Sale::allCompanies()->orderBy('id')->pluck('number')->all();
+
+        $this->actingInCompany($user, $company)->get(route('sales.index'))
+            ->assertOk()->assertSee('Servicio')->assertSee('Producto');
+        $this->actingInCompany($user, $company)->get(route('sales.index', ['kind' => 'servicio']))
+            ->assertOk()->assertSee($serviceSale)->assertDontSee($productSale);
+
+        \Laravel\Sanctum\Sanctum::actingAs($user);
+        $rows = collect($this->getJson('/api/v1/sales', ['X-Company-Id' => (string) $company->id])->assertOk()->json('data'))
+            ->keyBy('number');
+        $this->assertSame([1, 0], [$rows[$serviceSale]['services'], $rows[$serviceSale]['products']]);
+        $this->assertSame([0, 1], [$rows[$productSale]['services'], $rows[$productSale]['products']]);
+    }
+
     public function test_la_venta_entra_en_el_turno_de_caja(): void
     {
         $company = $this->company();
