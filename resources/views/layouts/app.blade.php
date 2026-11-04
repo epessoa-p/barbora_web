@@ -99,12 +99,14 @@
             'color' => '#0f766e',
             'items' => [
                 ['show' => $can('reports.view') && $hasModule('estadisticas'), 'route' => 'reports.index', 'pattern' => 'reports.index', 'icon' => 'bi-grid', 'label' => 'Resumen'],
+                ['show' => $can('reports.view') && $hasModule('estadisticas'), 'route' => 'reports.earnings', 'pattern' => 'reports.earnings', 'icon' => 'bi-cash-coin', 'label' => 'Ganancias'],
+                ['show' => $can('reports.view') && $hasModule('estadisticas'), 'route' => 'reports.balance', 'pattern' => 'reports.balance', 'icon' => 'bi-journal-text', 'label' => 'Balance'],
+                ['show' => $can('reports.view') && $hasModule('estadisticas'), 'route' => 'reports.analysis', 'pattern' => 'reports.analysis', 'icon' => 'bi-activity', 'label' => 'Análisis'],
+                ['show' => $can('reports.view') && $hasModule('estadisticas'), 'route' => 'reports.products', 'pattern' => 'reports.products', 'icon' => 'bi-box-seam', 'label' => 'Productos'],
                 ['show' => $can('reports.view') && $hasModule('estadisticas'), 'route' => 'reports.sales', 'pattern' => 'reports.sales', 'icon' => 'bi-graph-up-arrow', 'label' => 'Ventas'],
                 ['show' => $can('reports.view') && $hasModule('estadisticas'), 'route' => 'reports.services', 'pattern' => 'reports.services', 'icon' => 'bi-scissors', 'label' => 'Servicios'],
                 ['show' => $can('reports.view') && $hasModule('estadisticas'), 'route' => 'reports.staff', 'pattern' => 'reports.staff', 'icon' => 'bi-person-badge', 'label' => 'Barberos'],
-                ['show' => $can('reports.view') && $hasModule('estadisticas'), 'route' => 'reports.products', 'pattern' => 'reports.products', 'icon' => 'bi-box-seam', 'label' => 'Productos'],
                 ['show' => $can('reports.view') && $hasModule('estadisticas'), 'route' => 'reports.clients', 'pattern' => 'reports.clients', 'icon' => 'bi-people', 'label' => 'Clientes'],
-                ['show' => $can('reports.view') && $hasModule('estadisticas'), 'route' => 'reports.earnings', 'pattern' => 'reports.earnings', 'icon' => 'bi-cash-coin', 'label' => 'Ganancias'],
             ],
         ],
         [

@@ -14,29 +14,6 @@
         : 'El costo es el que tenía el producto el día de cada venta.',
 ])
 
-@include('reports.partials.filters')
-
-<div class="row g-3 mb-4">
-    @php
-        $cards = [
-            ['label' => 'Unidades vendidas', 'value' => rtrim(rtrim(number_format($totals['quantity'], 2, '.', ''), '0'), '.')],
-            ['label' => 'Ingreso', 'value' => \App\Support\Money::format($totals['revenue'], $tenantCompany)],
-            ['label' => $estimated ? 'Costo (con estimación)' : 'Costo', 'value' => \App\Support\Money::format($totals['cost'], $tenantCompany)],
-            ['label' => $estimated ? 'Margen (con estimación)' : 'Margen', 'value' => \App\Support\Money::format($totals['margin'], $tenantCompany)],
-        ];
-    @endphp
-    @foreach($cards as $card)
-        <div class="col-6 col-lg-3">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-body py-3">
-                    <p class="text-muted small mb-1">{{ $card['label'] }}</p>
-                    <p class="h4 fw-bold mb-0">{{ $card['value'] }}</p>
-                </div>
-            </div>
-        </div>
-    @endforeach
-</div>
-
 {{-- Valor del inventario: foto del stock de hoy, no depende del periodo. --}}
 @php $inv = $inventory; @endphp
 <h6 class="fw-bold mb-2">Inventario actual <span class="text-muted small fw-normal">· stock de hoy, no depende del periodo</span></h6>
@@ -65,6 +42,31 @@
         </div>
     </div>
 </div>
+
+<h6 class="fw-bold mb-2">Vendido en el periodo</h6>
+@include('reports.partials.filters')
+
+<div class="row g-3 mb-4">
+    @php
+        $cards = [
+            ['label' => 'Unidades vendidas', 'value' => rtrim(rtrim(number_format($totals['quantity'], 2, '.', ''), '0'), '.')],
+            ['label' => 'Ingreso', 'value' => \App\Support\Money::format($totals['revenue'], $tenantCompany)],
+            ['label' => $estimated ? 'Costo (con estimación)' : 'Costo', 'value' => \App\Support\Money::format($totals['cost'], $tenantCompany)],
+            ['label' => $estimated ? 'Margen (con estimación)' : 'Margen', 'value' => \App\Support\Money::format($totals['margin'], $tenantCompany)],
+        ];
+    @endphp
+    @foreach($cards as $card)
+        <div class="col-6 col-lg-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body py-3">
+                    <p class="text-muted small mb-1">{{ $card['label'] }}</p>
+                    <p class="h4 fw-bold mb-0">{{ $card['value'] }}</p>
+                </div>
+            </div>
+        </div>
+    @endforeach
+</div>
+
 
 <div class="card border-0 shadow-sm mb-4">
     <div class="card-body p-0">
