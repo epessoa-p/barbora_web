@@ -110,18 +110,21 @@ class FinanceTest extends TestCase
         $account = $this->account(opening: 500);
         $luz = $this->category('LUZ');
 
-        $this->act()->get(route('expenses.create'))->assertOk()->assertSee('Caja abierta')->assertSee('LUZ');
+        // LUZ es un servicio básico: sale en su pestaña, no en el alta general.
+        $this->act()->get(route('expenses.create'))->assertOk()->assertSee('Caja abierta')->assertDontSee('LUZ');
+        $this->act()->get(route('expenses.create', ['group' => 'basicos']))->assertOk()->assertSee('Servicio')->assertSee('LUZ');
 
         $this->act()->post(route('expenses.store'), [
             'expense_category_id' => $luz->id, 'description' => 'Luz de octubre', 'amount' => 180,
             'spent_on' => now()->toDateString(), 'source' => 'account', 'finance_account_id' => $account->id,
-        ])->assertRedirect(route('expenses.index'));
+        ])->assertRedirect(route('expenses.index', ['group' => 'basicos']));
 
         $expense = Expense::withoutGlobalScopes()->firstOrFail();
         $this->assertStringStartsWith('G-', $expense->number);
         $this->assertSame('320.00', $account->refresh()->balance);
 
-        $this->act()->get(route('expenses.index'))->assertOk()->assertSee('Luz de octubre');
+        $this->act()->get(route('expenses.index', ['group' => 'basicos']))->assertOk()->assertSee('Luz de octubre');
+        $this->act()->get(route('expenses.index'))->assertOk()->assertDontSee('Luz de octubre');
         $this->act()->get(route('expenses.show', $expense))->assertOk();
 
         $this->act()->patch(route('expenses.cancel', $expense), ['cancel_reason' => 'Duplicado'])->assertRedirect();
@@ -324,5 +327,61 @@ class FinanceTest extends TestCase
             ->assertOk()
             ->assertJsonPath('flow.expense', 230.0)
             ->assertJsonPath('flow.count', 2);
+    }
+
+    public function test_los_gastos_se_separan_en_generales_proveedores_personal_y_servicios_basicos(): void
+    {
+        $account = $this->account(opening: 2000);
+        ExpenseCategory::ensureDefaults($this->company->id);
+        $supplier = \App\Models\Supplier::create(['company_id' => $this->company->id, 'name' => 'DISTRIBUIDORA SUR', 'active' => true]);
+        $from = ['source' => 'account', 'finance_account_id' => $account->id, 'spent_on' => now()->toDateString()];
+
+        $names = fn (string $group) => $this->inCompany($this->company, fn () => ExpenseCategory::active()->inGroup($group)->pluck('name')->all());
+        $this->assertContains('COMIDA', $names('general'));
+        $this->assertNotContains('LUZ', $names('general'));
+        $this->assertNotContains('PAGO A PROVEEDORES', $names('general'));
+        $this->assertContains('LUZ', $names('basicos'));
+        $this->assertSame(['PAGO A PROVEEDORES'], $names('proveedor'));
+
+        // A un proveedor, sin elegir categoría ni escribir la descripción.
+        $this->act()->post(route('expenses.store'), $from + ['group' => 'proveedor', 'supplier_id' => $supplier->id, 'amount' => 300])
+            ->assertRedirect(route('expenses.index', ['group' => 'proveedor']));
+        $paid = Expense::withoutGlobalScopes()->latest('id')->firstOrFail();
+        $this->assertSame('PAGO A PROVEEDORES', $paid->category->name);
+        $this->assertSame('Pago a DISTRIBUIDORA SUR', $paid->description);
+
+        // Un servicio anual (el hosting) y la luz pagada este mes.
+        $this->act()->post(route('expense-categories.store'), ['name' => 'HOSTING', 'type' => 'basicos', 'frequency' => 'anual'])->assertRedirect();
+        $hosting = ExpenseCategory::withoutGlobalScopes()->where('name', 'HOSTING')->firstOrFail();
+        $this->assertTrue($hosting->isAnnual());
+        $this->assertSame('basicos', $hosting->group());
+
+        $luz = $this->category('LUZ');
+        $this->act()->post(route('expenses.store'), $from + ['group' => 'basicos', 'expense_category_id' => $luz->id, 'amount' => 180])->assertRedirect();
+        $this->act()->post(route('expenses.store'), ['group' => 'basicos', 'expense_category_id' => $hosting->id, 'amount' => 500,
+            'spent_on' => now()->subMonths(3)->toDateString()] + $from)->assertRedirect();
+
+        $month = $this->inCompany($this->company, fn () => app(\App\Support\BasicServicesMonth::class)->for(\App\Support\BasicServicesMonth::parse(null)));
+        $byName = collect($month['services'])->keyBy('name');
+        $this->assertSame('pagado', $byName['LUZ']['status']);
+        $this->assertSame(180.0, $byName['LUZ']['paid']);
+        $this->assertSame('pendiente', $byName['AGUA']['status']);
+        // El anual se pagó hace 3 meses: sigue al día, y dice cuándo vuelve.
+        $this->assertSame('pagado', $byName['HOSTING']['status']);
+        $this->assertSame(now()->subMonths(3)->addYear()->toDateString(), $byName['HOSTING']['next_due_on']);
+        $this->assertStringStartsWith('LUZ · ', Expense::withoutGlobalScopes()->where('expense_category_id', $luz->id)->value('description'));
+
+        // Las pestañas web listan solo lo suyo, y Servicios básicos trae el control del mes.
+        $this->act()->get(route('expenses.index', ['group' => 'proveedor']))->assertOk()->assertSee('Pago a DISTRIBUIDORA SUR')->assertDontSee('LUZ · ');
+        $this->act()->get(route('expenses.index', ['group' => 'basicos']))->assertOk()->assertSee('Pendiente')->assertSee('Anual');
+        $this->act()->get(route('expenses.create', ['group' => 'proveedor']))->assertOk()->assertSee('DISTRIBUIDORA SUR')->assertDontSee('PAGO A PROVEEDORES');
+
+        // La app.
+        \Laravel\Sanctum\Sanctum::actingAs($this->admin);
+        $headers = ['X-Company-Id' => (string) $this->company->id];
+        $this->getJson('/api/v1/finance/basics', $headers)->assertOk()->assertJsonPath('pending_count', 3);
+        $this->getJson('/api/v1/finance/options?group=proveedor', $headers)->assertOk()
+            ->assertJsonPath('default_category_id', $paid->expense_category_id);
+        $this->getJson('/api/v1/finance/expenses?group=general', $headers)->assertOk()->assertJsonCount(0, 'data');
     }
 }

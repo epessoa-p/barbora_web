@@ -11,6 +11,7 @@ use App\Models\FinanceAccount;
 use App\Models\FinanceMovement;
 use App\Models\Personal;
 use App\Models\Supplier;
+use App\Support\BasicServicesMonth;
 use App\Support\ExpenseRegistrar;
 use App\Support\PaymentSource;
 use App\Support\ShopTime;
@@ -42,10 +43,16 @@ class FinanceController extends ApiController
         $company = $this->company($request);
         ExpenseCategory::ensureDefaults($company->id);
 
+        $group = $request->query('group');
+
         return $this->json([
-            // Desde una pestaña de Gastos (proveedor, personal, básicos), solo las de ese grupo.
-            'categories' => ExpenseCategory::active()->inGroup($request->query('group'))->ordered()->get()
+            // Desde una pestaña de Gastos (general, proveedor, personal, básicos), solo las de ese grupo.
+            'categories' => ExpenseCategory::active()->inGroup($group)->ordered()->get()
                 ->map($this->categoryPayload(...))->all(),
+            // A proveedor o a personal no se elige categoría: va esta.
+            'default_category_id' => in_array($group, ['proveedor', 'personal'], true)
+                ? ExpenseCategory::defaultFor($company->id, $group)->id
+                : null,
             'suppliers' => Supplier::active()->orderBy('name')->get()->map(fn (Supplier $s) => ['id' => $s->id, 'name' => $s->name])->all(),
             'staff' => Personal::where('active', true)->orderBy('full_name')->get()->map(fn (Personal $p) => ['id' => $p->id, 'name' => $p->full_name])->all(),
             ...self::sourcePayload($company),
@@ -237,6 +244,14 @@ class FinanceController extends ApiController
         ]);
     }
 
+    /** Control de los servicios básicos de un mes (?month=YYYY-MM): pagados y pendientes. */
+    public function basics(Request $request, BasicServicesMonth $basics): JsonResponse
+    {
+        ExpenseCategory::ensureDefaults($this->company($request)->id);
+
+        return $this->json($basics->for(BasicServicesMonth::parse($request->query('month'))));
+    }
+
     public function storeExpense(Request $request): JsonResponse
     {
         $expense = $this->expenses->register($request, $this->company($request));
@@ -268,6 +283,8 @@ class FinanceController extends ApiController
         return $this->json([
             'data' => ExpenseCategory::withCount('expenses')->ordered()->get()->map($this->categoryPayload(...))->all(),
             'payees' => ExpenseCategory::PAYEES,
+            'types' => ExpenseCategory::TYPES,
+            'frequencies' => ExpenseCategory::FREQUENCIES,
         ]);
     }
 
@@ -322,25 +339,7 @@ class FinanceController extends ApiController
 
     protected function validateCategory(Request $request, int $companyId, ?ExpenseCategory $category = null): array
     {
-        $data = $request->validate([
-            'name' => ['required', 'string', 'max:255', Rule::unique('expense_categories', 'name')->where('company_id', $companyId)->ignore($category?->id)],
-            'payee' => ['required', Rule::in(array_keys(ExpenseCategory::PAYEES))],
-            // Servicio básico / recurrente: alquiler, luz, agua…
-            'recurring' => ['sometimes', 'boolean'],
-            'active' => ['sometimes', 'boolean'],
-        ], [
-            'name.required' => 'Ponle un nombre a la categoría.',
-            'name.unique' => 'Ya hay una categoría con ese nombre.',
-        ]);
-
-        unset($data['active']);
-        $data['name'] = trim($data['name']);
-
-        if ($request->has('recurring') || ! $category) {
-            $data['recurring'] = $request->boolean('recurring');
-        }
-
-        return $data;
+        return ExpenseCategory::validateForm($request, $companyId, $category);
     }
 
     public static function accountPayload(FinanceAccount $account): array
@@ -367,6 +366,9 @@ class FinanceController extends ApiController
             'name' => $category->name,
             'payee' => $category->payee,
             'recurring' => (bool) $category->recurring,
+            // El tipo (general, basicos, proveedor, personal) y, si es servicio básico, cada cuánto.
+            'type' => $category->group(),
+            'frequency' => $category->frequency ?: 'mensual',
             'active' => (bool) $category->active,
             'expenses_count' => (int) ($category->expenses_count ?? 0),
         ];

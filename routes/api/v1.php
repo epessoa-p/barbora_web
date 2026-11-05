@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\BookingController;
 use App\Http\Controllers\Api\V1\CashController;
 use App\Http\Controllers\Api\V1\CatalogController;
+use App\Http\Controllers\Api\V1\CommissionController;
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\FinanceController;
 use App\Http\Controllers\Api\V1\InventoryController;
@@ -16,6 +17,7 @@ use App\Http\Controllers\Api\V1\PurchaseController;
 use App\Http\Controllers\Api\V1\ReminderController;
 use App\Http\Controllers\Api\V1\ReportController;
 use App\Http\Controllers\Api\V1\SaleController;
+use App\Http\Controllers\Api\V1\ScheduleController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -156,6 +158,23 @@ Route::middleware('auth:sanctum')->group(function () {
         ->middleware('check-permission:personal.create')->name('personal.store');
     Route::put('/personal/{personal}', [PersonalController::class, 'update'])
         ->middleware('check-permission:personal.edit')->name('personal.update');
+
+    // El horario de cualquier persona del personal (atienda citas o no).
+    Route::get('/personal/{personal}/schedules', [ScheduleController::class, 'index'])
+        ->middleware('check-permission:schedules.view')->name('personal.schedules');
+    Route::post('/personal/{personal}/schedules', [ScheduleController::class, 'store'])
+        ->middleware('check-permission:schedules.edit')->name('personal.schedules.store');
+    Route::delete('/personal/{personal}/schedules/{schedule}', [ScheduleController::class, 'destroy'])
+        ->middleware('check-permission:schedules.edit')->name('personal.schedules.destroy');
+
+    // Pagar comisiones (Gastos › Personal en la app): lo pendiente, de
+    // cualquier fecha, y liquidarlo. Ver App\Support\CommissionSettler.
+    Route::middleware('plan:comisiones')->group(function () {
+        Route::get('/commissions/pending', [CommissionController::class, 'pending'])
+            ->middleware('check-permission:commissions.view')->name('commissions.pending');
+        Route::post('/commissions/{personal}/settle', [CommissionController::class, 'settle'])
+            ->middleware('check-permission:commissions.create')->name('commissions.settle');
+    });
 
     // Alta rápida de cliente al reservar (módulo «clientes»).
     Route::post('/clients', [BookingController::class, 'storeClient'])
@@ -338,6 +357,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::get('/expenses', [FinanceController::class, 'expenses'])
             ->middleware('check-permission:expenses.view')->name('expenses');
+        // Servicios básicos de un mes: cuáles se pagaron y cuáles faltan.
+        Route::get('/basics', [FinanceController::class, 'basics'])
+            ->middleware('check-permission:expenses.view')->name('basics');
         Route::post('/expenses', [FinanceController::class, 'storeExpense'])
             ->middleware('check-permission:expenses.create')->name('expenses.store');
         Route::patch('/expenses/{expense}/cancel', [FinanceController::class, 'cancelExpense'])

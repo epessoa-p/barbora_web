@@ -40,7 +40,24 @@ class ExpenseCategory extends Model
         ['OTROS', 'ninguno'],
     ];
 
-    protected $fillable = ['company_id', 'name', 'payee', 'recurring', 'active', 'sort_order'];
+    /** Cada cuánto se paga un servicio básico. */
+    public const FREQUENCIES = [
+        'mensual' => 'Mensual',
+        'anual' => 'Anual',
+    ];
+
+    /**
+     * El tipo que se elige al crear o editar: decide `payee` y `recurring`.
+     * Un servicio básico no tiene destinatario: se paga la factura.
+     */
+    public const TYPES = [
+        'general' => 'Gasto general',
+        'basicos' => 'Servicio básico',
+        'proveedor' => 'Pago a proveedor',
+        'personal' => 'Pago a personal',
+    ];
+
+    protected $fillable = ['company_id', 'name', 'payee', 'recurring', 'frequency', 'active', 'sort_order'];
 
     protected $casts = [
         'active' => 'boolean',
@@ -55,18 +72,99 @@ class ExpenseCategory extends Model
     }
 
     /**
-     * Los grupos de la app (pestañas de Gastos): a proveedores, a personal y
-     * servicios básicos (lo mensual o anual: alquiler, luz, agua…).
+     * Los grupos (pestañas de Gastos), sin solaparse: generales, a
+     * proveedores, a personal y servicios básicos (lo mensual o anual:
+     * alquiler, luz, agua, hosting…). Servicio básico manda sobre el resto.
      */
-    public const GROUPS = ['proveedor', 'personal', 'basicos'];
+    public const GROUPS = ['general', 'proveedor', 'personal', 'basicos'];
 
+    /** Sin grupo (o uno desconocido), no filtra. */
     public function scopeInGroup(Builder $query, ?string $group): Builder
     {
         return match ($group) {
-            'proveedor', 'personal' => $query->where('payee', $group),
             'basicos' => $query->where('recurring', true),
+            'proveedor', 'personal' => $query->where('recurring', false)->where('payee', $group),
+            'general' => $query->where('recurring', false)->where('payee', 'ninguno'),
             default => $query,
         };
+    }
+
+    /** El grupo de esta categoría, con la misma regla que scopeInGroup. */
+    public function group(): string
+    {
+        return $this->recurring ? 'basicos' : (in_array($this->payee, ['proveedor', 'personal'], true) ? $this->payee : 'general');
+    }
+
+    /** El tipo elegido → payee, recurring (y frequency si es servicio básico). */
+    public static function attributesForType(string $type, ?string $frequency = null): array
+    {
+        return match ($type) {
+            'basicos' => ['payee' => 'ninguno', 'recurring' => true, 'frequency' => array_key_exists((string) $frequency, self::FREQUENCIES) ? $frequency : 'mensual'],
+            'proveedor', 'personal' => ['payee' => $type, 'recurring' => false],
+            default => ['payee' => 'ninguno', 'recurring' => false],
+        };
+    }
+
+    /**
+     * Reglas del alta y la edición, las mismas en la web y en la API.
+     *
+     * Se elige el `type` (general, servicio básico, a proveedor, a personal)
+     * y, si es servicio básico, la `frequency`. Los formularios viejos que
+     * mandan `payee` y la casilla `recurring` siguen funcionando.
+     */
+    public static function validateForm(\Illuminate\Http\Request $request, ?int $companyId, ?self $category = null): array
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255', \Illuminate\Validation\Rule::unique('expense_categories', 'name')->where('company_id', $companyId)->ignore($category?->id)],
+            'type' => ['nullable', \Illuminate\Validation\Rule::in(array_keys(self::TYPES))],
+            'frequency' => ['nullable', \Illuminate\Validation\Rule::in(array_keys(self::FREQUENCIES))],
+            'payee' => [\Illuminate\Validation\Rule::requiredIf(! $request->filled('type')), 'nullable', \Illuminate\Validation\Rule::in(array_keys(self::PAYEES))],
+            'recurring' => ['sometimes', 'boolean'],
+            'active' => ['sometimes', 'boolean'],
+        ], [
+            'name.required' => 'Ponle un nombre a la categoría.',
+            'name.unique' => 'Ya hay una categoría con ese nombre.',
+            'payee.required' => 'Elige el tipo de gasto.',
+        ]);
+
+        $attributes = ['name' => trim($data['name'])];
+
+        if ($request->filled('type')) {
+            return $attributes + self::attributesForType($data['type'], $data['frequency'] ?? null);
+        }
+
+        // Formulario viejo: payee + casilla de servicio básico.
+        $attributes['payee'] = $data['payee'];
+        if ($request->has('recurring') || ! $category) {
+            $attributes['recurring'] = $request->boolean('recurring');
+        }
+        if (! empty($data['frequency'])) {
+            $attributes['frequency'] = $data['frequency'];
+        }
+
+        return $attributes;
+    }
+
+    public function isAnnual(): bool
+    {
+        return $this->recurring && $this->frequency === 'anual';
+    }
+
+    /**
+     * La categoría con la que se registra un pago a proveedor o a personal
+     * sin tener que elegirla: la primera activa del grupo, o la habitual
+     * («PAGO A PROVEEDORES» / «PAGO A PERSONAL») si no hay ninguna.
+     */
+    public static function defaultFor(int $companyId, string $group): self
+    {
+        $name = $group === 'personal' ? 'PAGO A PERSONAL' : 'PAGO A PROVEEDORES';
+        $inGroup = static::withoutGlobalScopes()->where('company_id', $companyId)->active()->inGroup($group);
+
+        // La habitual primero; si la renombraron, la primera del grupo que no
+        // sea la de comisiones (esa la usa el sistema).
+        return (clone $inGroup)->where('name', $name)->first()
+            ?? (clone $inGroup)->where('name', '!=', self::COMMISSIONS)->ordered()->first()
+            ?? static::system($companyId, $name, $group);
     }
 
     public function scopeOrdered(Builder $query): Builder

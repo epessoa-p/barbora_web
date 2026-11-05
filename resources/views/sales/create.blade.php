@@ -293,7 +293,7 @@
                     </div>
                     <div class="col-5">
                         <label for="quick-qty" class="form-label">Cantidad</label>
-                        <input type="number" id="quick-qty" class="form-control" step="1" min="1" value="1" required>
+                        <input type="number" id="quick-qty" class="form-control" step="1" min="1" value="1" inputmode="numeric" required>
                     </div>
                 </div>
             </div>
@@ -337,7 +337,7 @@
         event.preventDefault();
         const name = document.getElementById('quick-name').value.trim().toUpperCase();
         const price = parseFloat(document.getElementById('quick-price').value);
-        const qty = parseFloat(document.getElementById('quick-qty').value) || 1;
+        const qty = Math.max(1, Math.round(parseFloat(document.getElementById('quick-qty').value) || 1));
         if (!name || !(price > 0)) return;
 
         cart.push({ type: 'rapido', id: 'q' + (++quickId), name, price, quantity: qty, stock: null });
@@ -375,7 +375,7 @@
                     '<div class="text-muted" style="font-size:.75rem">' + money(line.price) + ' c/u</div>' +
                 '</div>' +
                 '<input type="number" class="form-control form-control-sm qty" style="width:4.5rem" ' +
-                    'min="0.01" step="1" value="' + line.quantity + '">' +
+                    'min="1" step="1" inputmode="numeric" value="' + line.quantity + '">' +
                 '<div class="text-end fw-semibold small" style="width:5.5rem">' + money(line.price * line.quantity) + '</div>' +
                 '<button type="button" class="btn btn-sm btn-link text-danger p-0 remove"><i class="bi bi-x-lg"></i></button>' +
                 '<input type="hidden" name="items[' + index + '][type]" value="' + line.type + '">' +
@@ -386,8 +386,10 @@
                     : '<input type="hidden" name="items[' + index + '][id]" value="' + line.id + '">') +
                 '<input type="hidden" name="items[' + index + '][quantity]" value="' + line.quantity + '">';
 
-            row.querySelector('.qty').addEventListener('input', function () {
-                let value = parseFloat(this.value) || 0;
+            // La cantidad es siempre entera y como mínimo 1. Se aplica al salir del
+            // campo (change), para no redibujar mientras se escribe.
+            row.querySelector('.qty').addEventListener('change', function () {
+                let value = Math.max(1, Math.round(parseFloat(this.value) || 1));
                 if (line.stock !== null && value > line.stock) { value = line.stock; this.value = value; }
                 line.quantity = value;
                 render();

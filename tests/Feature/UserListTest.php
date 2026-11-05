@@ -97,4 +97,29 @@ class UserListTest extends TestCase
             'phone' => '70000000',
         ]);
     }
+
+    public function test_el_superadmin_cambia_la_contrasena_desde_editar(): void
+    {
+        $super = User::factory()->create(['is_super_admin' => true]);
+        $user = User::factory()->create(['name' => 'barbero1', 'email' => 'barbero@demo.test']);
+        $old = $user->password;
+        $base = ['name' => 'barbero1', 'email' => 'barbero@demo.test'];
+
+        $this->actingAs($super)->get(route('users.edit', $user))->assertOk()->assertSee('Nueva contraseña');
+
+        // Las dos no coinciden: no se guarda.
+        $this->actingAs($super)->put(route('users.update', $user), $base + [
+            'password' => 'nueva-clave-1', 'password_confirmation' => 'otra-cosa',
+        ])->assertSessionHasErrors('password');
+
+        // Vacía: no se toca.
+        $this->actingAs($super)->put(route('users.update', $user), $base + ['password' => ''])->assertSessionHasNoErrors();
+        $this->assertSame($old, $user->refresh()->password);
+
+        $this->actingAs($super)->put(route('users.update', $user), $base + [
+            'password' => 'nueva-clave-1', 'password_confirmation' => 'nueva-clave-1',
+        ])->assertRedirect(route('users.index'))->assertSessionHasNoErrors();
+
+        $this->assertTrue(\Illuminate\Support\Facades\Hash::check('nueva-clave-1', $user->refresh()->password));
+    }
 }

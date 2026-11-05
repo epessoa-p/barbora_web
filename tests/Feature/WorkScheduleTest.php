@@ -156,19 +156,49 @@ class WorkScheduleTest extends TestCase
             ->assertSessionHasErrors('branch_id');
     }
 
-    public function test_solo_aparecen_en_horarios_quienes_atienden_citas(): void
+    public function test_en_horarios_aparece_todo_el_personal_aunque_no_atienda_citas(): void
     {
         $company = $this->companyWithPlan();
         $this->barber($company, ['full_name' => 'Barbero Visible', 'bookable' => true]);
-        $this->barber($company, ['full_name' => 'Cajero Oculto', 'bookable' => false]);
+        $this->barber($company, ['full_name' => 'Recepcionista Ana', 'bookable' => false]);
+        $this->barber($company, ['full_name' => 'Ex Empleado', 'active' => false]);
 
         $user = $this->userInCompany($company, ['schedules.view']);
 
+        // La recepcionista también tiene horario; solo se marca que no atiende citas.
         $this->actingInCompany($user, $company)
             ->get(route('schedules.index'))
             ->assertOk()
             ->assertSee('Barbero Visible')
-            ->assertDontSee('Cajero Oculto');
+            ->assertSee('Recepcionista Ana')
+            ->assertSee('No atiende citas')
+            ->assertDontSee('Ex Empleado');
+    }
+
+    public function test_la_app_ve_agrega_y_quita_franjas_del_horario(): void
+    {
+        $company = $this->companyWithPlan();
+        $ana = $this->barber($company, ['full_name' => 'Recepcionista Ana', 'bookable' => false]);
+        $user = $this->userInCompany($company, ['schedules.view', 'schedules.edit']);
+        \Laravel\Sanctum\Sanctum::actingAs($user);
+        $headers = ['X-Company-Id' => (string) $company->id];
+
+        $this->getJson("/api/v1/personal/{$ana->id}/schedules", $headers)->assertOk()->assertJsonCount(0, 'data');
+
+        // De lunes a viernes, de 9 a 13, de una vez.
+        $this->postJson("/api/v1/personal/{$ana->id}/schedules", [
+            'weekdays' => [1, 2, 3, 4, 5], 'start_time' => '09:00', 'end_time' => '13:00',
+        ], $headers)->assertCreated()->assertJsonCount(5, 'data')->assertJsonPath('data.0.start_time', '09:00');
+
+        // Pisar una franja se rechaza, y no se crea ninguna de las pedidas.
+        $this->postJson("/api/v1/personal/{$ana->id}/schedules", [
+            'weekdays' => [6, 1], 'start_time' => '12:00', 'end_time' => '15:00',
+        ], $headers)->assertStatus(422)->assertJsonValidationErrors('start_time');
+        $this->assertSame(5, $ana->schedules()->count());
+
+        $first = $ana->schedules()->first();
+        $this->deleteJson("/api/v1/personal/{$ana->id}/schedules/{$first->id}", [], $headers)
+            ->assertOk()->assertJsonCount(4, 'data');
     }
 
     public function test_no_se_ve_el_horario_de_otra_empresa(): void

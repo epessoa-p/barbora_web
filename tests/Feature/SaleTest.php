@@ -317,6 +317,29 @@ class SaleTest extends TestCase
         ])->assertSessionHasErrors(['items.0.name', 'items.0.price']);
     }
 
+    public function test_la_cantidad_es_siempre_entera(): void
+    {
+        $company = $this->company(['pos', 'caja', 'inventario', 'agenda']);
+        $this->warehouse($company);
+        $this->openCash($company);
+        $service = $this->service($company, 50);
+        $user = $this->userInCompany($company, ['sales.view', 'sales.create']);
+
+        $this->actingInCompany($user, $company)->post(route('sales.store'), [
+            'items' => [['type' => 'servicio', 'id' => $service->id, 'quantity' => 1.5]],
+            'payments' => [['payment_method' => 'efectivo', 'amount' => 75]],
+        ])->assertSessionHasErrors('items.0.quantity');
+
+        $this->actingInCompany($user, $company)->post(route('sales.store'), [
+            'items' => [['type' => 'servicio', 'id' => $service->id, 'quantity' => 2]],
+            'payments' => [['payment_method' => 'efectivo', 'amount' => 100]],
+        ])->assertRedirect()->assertSessionHasNoErrors();
+
+        // El campo del carrito ya no ofrece decimales.
+        $this->actingInCompany($user, $company)->get(route('sales.create'))
+            ->assertOk()->assertSee('min="1" step="1" inputmode="numeric"', false);
+    }
+
     public function test_el_reporte_de_ganancias_separa_ventas_servicios_y_ventas_rapidas(): void
     {
         $company = $this->company(['pos', 'caja', 'inventario', 'agenda', 'estadisticas']);

@@ -20,6 +20,10 @@
     </div>
 </div>
 
+{{-- Lo que se debe, de cualquier fecha: lo primero que se mira. --}}
+@include('commissions.partials.owed-card')
+
+<h6 class="fw-bold mb-2">En el periodo</h6>
 <div class="row g-3 mb-4">
     @foreach([
         ['Devengado', $totals['earned'], 'bi-graph-up-arrow', '#2563eb'],
@@ -94,9 +98,14 @@
                                 @endif
                             </td>
                             <td class="text-end pe-3">
-                                <a href="{{ route('commissions.show', [$row['personal'], 'from' => $from->toDateString(), 'to' => $to->toDateString()]) }}"
-                                   class="btn btn-sm btn-outline-secondary">
-                                    <i class="bi bi-eye"></i> Detalle
+                                {{-- Con algo pendiente, el botón dice lo que hace: pagar. --}}
+                                <a href="{{ route('commissions.show', [$row['personal'], 'from' => $from->toDateString(), 'to' => $to->toDateString()]) }}{{ $row['pending'] > 0 ? '#pagar' : '' }}"
+                                   class="btn btn-sm {{ $row['pending'] > 0 ? 'btn-warning' : 'btn-outline-secondary' }}">
+                                    @if($row['pending'] > 0)
+                                        <i class="bi bi-cash-coin"></i> Pagar
+                                    @else
+                                        <i class="bi bi-eye"></i> Detalle
+                                    @endif
                                 </a>
                             </td>
                         </tr>

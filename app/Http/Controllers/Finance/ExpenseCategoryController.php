@@ -57,21 +57,8 @@ class ExpenseCategoryController extends Controller
 
     protected function validated(Request $request, ?int $companyId, ?ExpenseCategory $category = null): array
     {
-        $data = $request->validate([
-            'name' => [
-                'required', 'string', 'max:255',
-                Rule::unique('expense_categories', 'name')->where('company_id', $companyId)->ignore($category?->id),
-            ],
-            'payee' => ['required', Rule::in(array_keys(ExpenseCategory::PAYEES))],
-        ], [
-            'name.required' => 'Ponle un nombre a la categoría.',
-            'name.unique' => 'Ya hay una categoría con ese nombre.',
-        ]);
-
-        $data['name'] = trim($data['name']);
-        // Servicio básico / recurrente (alquiler, luz, agua…): una casilla.
-        $data['recurring'] = $request->boolean('recurring');
-
-        return $data;
+        // Tipo (general, servicio básico, a proveedor, a personal) y, si es
+        // servicio básico, mensual o anual. Las mismas reglas que la API.
+        return ExpenseCategory::validateForm($request, $companyId, $category);
     }
 }

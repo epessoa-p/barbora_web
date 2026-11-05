@@ -9,6 +9,7 @@ use App\Models\ExpenseCategory;
 use App\Models\FinanceAccount;
 use App\Models\Personal;
 use App\Models\Supplier;
+use App\Support\BasicServicesMonth;
 use App\Support\ExpenseRegistrar;
 use App\Support\Money;
 use App\Support\PaymentSource;
@@ -38,6 +39,14 @@ class ExpenseController extends Controller
         if ($to = $request->query('to')) {
             $query->whereDate('spent_on', '<=', $to);
         }
+        // Pestañas: generales (por defecto), a proveedores, a personal,
+        // servicios básicos, o todos juntos.
+        $group = $request->query('group', 'general');
+        $group = in_array($group, [...ExpenseCategory::GROUPS, 'todos'], true) ? $group : 'general';
+        if ($group !== 'todos') {
+            $query->whereHas('category', fn ($q) => $q->withTrashed()->inGroup($group));
+        }
+
         if ($category = $request->integer('category')) {
             $query->where('expense_category_id', $category);
         }
@@ -48,10 +57,28 @@ class ExpenseController extends Controller
         $total = (clone $query)->reorder()->active()->sum('amount');
 
         return view('finance.expenses.index', [
+            'group' => $group,
             'expenses' => $query->paginate(25)->withQueryString(),
-            'categories' => ExpenseCategory::ordered()->get(),
+            'categories' => ExpenseCategory::inGroup($group === 'todos' ? null : $group)->ordered()->get(),
             'total' => (float) $total,
+            // El control del mes, solo en la pestaña de servicios básicos.
+            // En Personal: las comisiones sin pagar, de cualquier fecha.
+            'owed' => $group === 'personal' && $this->canSeeCommissions($request)
+                ? \App\Support\PendingCommissions::byPersonal()
+                : null,
+            'basics' => $group === 'basicos'
+                ? app(BasicServicesMonth::class)->for(BasicServicesMonth::parse($request->query('month')))
+                : null,
         ]);
+    }
+
+    /** Las comisiones se muestran en Gastos › Personal si el plan y el permiso lo dejan. */
+    protected function canSeeCommissions(Request $request): bool
+    {
+        $company = $request->attributes->get('tenant_company');
+
+        return (bool) $company?->planAllows('comisiones')
+            && auth()->user()->hasPermissionInCompany('commissions.view', $company);
     }
 
     public function create(Request $request)
@@ -60,8 +87,16 @@ class ExpenseController extends Controller
         ExpenseCategory::ensureDefaults($companyId);
         $company = $request->attributes->get('tenant_company');
 
+        // El formulario cambia según desde qué pestaña se llega.
+        $group = old('group', $request->query('group', 'general'));
+        $group = in_array($group, ExpenseCategory::GROUPS, true) ? $group : 'general';
+
         return view('finance.expenses.create', [
-            'categories' => ExpenseCategory::active()->ordered()->get(),
+            'group' => $group,
+            'categories' => ExpenseCategory::active()->inGroup($group)->ordered()->get(),
+            // Desde el control del mes: el servicio ya elegido y el último importe.
+            'selectedCategory' => $request->integer('category') ?: null,
+            'suggestedAmount' => $request->query('amount'),
             'suppliers' => Supplier::active()->orderBy('name')->get(),
             'staff' => Personal::where('active', true)->orderBy('full_name')->get(),
             'branches' => Branch::workableFor(auth()->user(), $company->id),
@@ -74,7 +109,8 @@ class ExpenseController extends Controller
         $company = $request->attributes->get('tenant_company');
         $expense = $this->registrar->register($request, $company);
 
-        return redirect()->route('expenses.index')
+        // De vuelta a la pestaña del gasto.
+        return redirect()->route('expenses.index', ['group' => $expense->category?->group() ?? 'general'])
             ->with('success', "Gasto {$expense->number} de ".Money::format($expense->amount, $company).' registrado.');
     }
 

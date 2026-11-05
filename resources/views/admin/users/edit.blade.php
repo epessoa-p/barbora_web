@@ -26,6 +26,26 @@
                 <input type="text" id="phone" name="phone" class="form-control @error('phone') is-invalid @enderror" value="{{ old('phone', $user->phone) }}">
             </div>
 
+            {{-- Cambiar la contraseña: solo el superadmin (Modo Global). Vacío = no se toca. --}}
+            @if(auth()->user()->is_super_admin)
+                <div class="border rounded p-3 mb-3 bg-light">
+                    <h6 class="fw-bold mb-1"><i class="bi bi-key"></i> Nueva contraseña</h6>
+                    <p class="small text-muted mb-3">Déjala vacía para no cambiarla. Mínimo 8 caracteres.</p>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="password" class="form-label">Contraseña</label>
+                            <input type="password" id="password" name="password" autocomplete="new-password"
+                                   class="form-control @error('password') is-invalid @enderror">
+                            @error('password')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        </div>
+                        <div class="col-md-6">
+                            <label for="password_confirmation" class="form-label">Confirmar contraseña</label>
+                            <input type="password" id="password_confirmation" name="password_confirmation" autocomplete="new-password" class="form-control">
+                        </div>
+                    </div>
+                </div>
+            @endif
+
             <div class="form-group">
                 <button type="submit" class="btn btn-primary">
                     <i class="bi bi-check-circle"></i> Actualizar

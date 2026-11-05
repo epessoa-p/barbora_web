@@ -107,9 +107,15 @@ class CashSessionController extends Controller
             'opening_notes' => $data['opening_notes'] ?? null,
         ]);
 
-        return redirect()->route('cash.current', ['caja' => $caja->id])
-            ->with('success', "Turno abierto en «{$caja->name}» con un fondo de "
-                . \App\Support\Money::format($session->opening_amount, $caja->company).'.');
+        $message = "Turno abierto en «{$caja->name}» con un fondo de "
+            . \App\Support\Money::format($session->opening_amount, $caja->company).'.';
+
+        // Desde el modal de la barra: se queda en la página en la que estaba.
+        if ($request->input('redirect') === 'back') {
+            return back()->with('success', $message);
+        }
+
+        return redirect()->route('cash.current', ['caja' => $caja->id])->with('success', $message);
     }
 
     /** Cerrar turno: se cuenta el efectivo y se guarda el arqueo. */

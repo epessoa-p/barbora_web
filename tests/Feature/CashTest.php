@@ -72,6 +72,31 @@ class CashTest extends TestCase
         $this->assertSame($user->id, $session->opened_by);
     }
 
+    public function test_la_barra_muestra_la_caja_y_se_abre_desde_el_modal(): void
+    {
+        $company = $this->companyWithPlan();
+        $general = $this->caja($company, ['name' => 'CAJA GENERAL']);
+        $otra = $this->caja($company, ['name' => 'CAJA BARRA']);
+        $user = $this->userInCompany($company, ['cash.view', 'cash.create', 'clients.view']);
+
+        // Cerrada: el botón lo dice y el modal ofrece abrirla.
+        $this->actingInCompany($user, $company)->get(route('clients.index'))
+            ->assertOk()->assertSee('cashModal')->assertSee('Cerrada')->assertSee('Abrir turno')
+            ->assertSee('CAJA GENERAL')->assertSee('CAJA BARRA');
+
+        // Abrir desde el modal vuelve a la misma página.
+        $this->actingInCompany($user, $company)->from(route('clients.index'))
+            ->post(route('cash.open'), ['caja_id' => $otra->id, 'opening_amount' => 50, 'redirect' => 'back'])
+            ->assertRedirect(route('clients.index'));
+
+        // Cada caja tiene su propio turno: la general sigue cerrada.
+        $status = $this->inCompany($company, fn () => \App\Support\CashStatus::for($user, $company->id));
+        $byName = $status['cajas']->keyBy('name');
+        $this->assertTrue($byName['CAJA BARRA']['open']);
+        $this->assertFalse($byName['CAJA GENERAL']['open']);
+        $this->assertSame(50.0, $byName['CAJA BARRA']['session']['expected_cash']);
+    }
+
     public function test_una_caja_no_abre_dos_turnos_a_la_vez(): void
     {
         $company = $this->companyWithPlan();

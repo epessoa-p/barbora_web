@@ -23,6 +23,21 @@ class ExpenseRegistrar
 
     public function register(Request $request, Company $company): Expense
     {
+        // Desde Proveedores o Personal no se elige la categoría: va la del grupo.
+        $group = in_array($request->input('group'), ['proveedor', 'personal'], true) ? $request->input('group') : null;
+        if ($group && ! $request->filled('expense_category_id')) {
+            $request->merge(['expense_category_id' => ExpenseCategory::defaultFor($company->id, $group)->id]);
+        }
+
+        // La descripción se completa sola si no hace falta escribirla: el
+        // pago a alguien concreto o un servicio básico.
+        if (! $request->filled('description') && ($category = ExpenseCategory::withoutGlobalScopes()
+            ->where('company_id', $company->id)->find($request->input('expense_category_id')))) {
+            if ($description = $this->defaultDescription($category, $request)) {
+                $request->merge(['description' => $description]);
+            }
+        }
+
         $data = $request->validate([
             'expense_category_id' => ['required', Rule::exists('expense_categories', 'id')->where('company_id', $company->id)->whereNull('deleted_at')],
             'supplier_id' => ['nullable', Rule::exists('suppliers', 'id')->where('company_id', $company->id)],
@@ -61,6 +76,26 @@ class ExpenseRegistrar
             'reference' => $data['reference'] ?? null,
             'notes' => $data['notes'] ?? null,
         ], $request->user()->id);
+    }
+
+    /**
+     * «Pago a DISTRIBUIDORA X», «LUZ · noviembre 2026»… o null si es un gasto
+     * general (ahí sí hay que describirlo).
+     */
+    protected function defaultDescription(ExpenseCategory $category, Request $request): ?string
+    {
+        $on = rescue(fn () => \Carbon\CarbonImmutable::parse((string) $request->input('spent_on')), now()->toImmutable(), false);
+
+        return match ($category->group()) {
+            'basicos' => $category->name.' · '.($category->isAnnual()
+                ? $on->year
+                : \App\Support\BasicServicesMonth::MONTHS[$on->month - 1].' '.$on->year),
+            'proveedor' => ($name = \App\Models\Supplier::withoutGlobalScopes()->find($request->input('supplier_id'))?->name)
+                ? "Pago a {$name}" : $category->name,
+            'personal' => ($name = \App\Models\Personal::withoutGlobalScopes()->find($request->input('personal_id'))?->full_name)
+                ? "Pago a {$name}" : $category->name,
+            default => null,
+        };
     }
 
     /**

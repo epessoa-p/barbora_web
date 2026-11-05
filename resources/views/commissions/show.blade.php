@@ -87,10 +87,11 @@
         </div>
     </div>
 
-    <div class="col-lg-5">
-        <div class="card border-0 shadow-sm">
+    {{-- El pago va primero en el teléfono y resaltado: es a lo que se viene. --}}
+    <div class="col-lg-5 order-first order-lg-last" id="pagar">
+        <div class="card shadow-sm border-warning border-2">
             <div class="card-body">
-                <h6 class="fw-bold mb-3">A pagar</h6>
+                <h6 class="fw-bold mb-3"><i class="bi bi-cash-coin text-warning"></i> A pagar</h6>
 
                 <div class="d-flex justify-content-between py-1 border-bottom">
                     <span class="text-muted">Comisiones pendientes ({{ $pending->count() }})</span>

@@ -141,7 +141,9 @@
 
         <div class="col-lg-5">
             @include('cash.partials.movement-form', ['session' => $session])
-            @include('cash.partials.close-form', ['session' => $session, 'totals' => $totals])
+            <div id="cerrar">
+                @include('cash.partials.close-form', ['session' => $session, 'totals' => $totals])
+            </div>
         </div>
     </div>
 @endif

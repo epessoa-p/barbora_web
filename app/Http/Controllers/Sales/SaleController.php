@@ -122,7 +122,8 @@ class SaleController extends Controller
             // Venta rápida: nombre y precio los escribe quien cobra.
             'items.*.name' => 'required_if:items.*.type,rapido|nullable|string|max:255',
             'items.*.price' => 'required_if:items.*.type,rapido|nullable|numeric|min:0.01',
-            'items.*.quantity' => 'required|numeric|min:0.01',
+            // Siempre en unidades enteras: un servicio o un producto no se parte.
+            'items.*.quantity' => 'required|integer|min:1',
 
             'payments' => 'required|array|min:1',
             'payments.*.payment_method' => ['required', Rule::in(array_keys(SalePayment::methods()))],

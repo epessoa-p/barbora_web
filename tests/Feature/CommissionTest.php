@@ -474,6 +474,48 @@ class CommissionTest extends TestCase
         $this->assertSame(0.0, $earnings['other_expenses']);
     }
 
+    public function test_lo_pendiente_se_ve_aunque_sea_de_otro_mes_y_se_paga_desde_la_app(): void
+    {
+        // Con Finanzas, para ver también Gastos › Personal.
+        $company = $this->companyWithPlan(planAttributes: [
+            'features' => ['pos', 'caja', 'inventario', 'agenda', 'comisiones', 'finanzas'],
+        ]);
+        $this->warehouse($company);
+        $session = $this->openCash($company);
+        $barber = $this->barber($company, 'TANIA MOLINA');
+        $service = Service::factory()->create(['company_id' => $company->id, 'price' => 100]);
+        $this->rule($company, ['value' => 40]);
+
+        $this->sell($company, $barber, [['type' => 'servicio', 'id' => $service->id, 'price' => 100]]);
+        // La comisión es del mes pasado: el filtro del mes en curso no la muestra.
+        \App\Models\CommissionEntry::allCompanies()->update(['earned_at' => now()->subMonthNoOverflow()->startOfMonth()->addDays(3)]);
+
+        $user = $this->userInCompany($company, ['commissions.view', 'commissions.create', 'expenses.view'], 'jefe');
+
+        // Igual se ve arriba, en «Pendiente de pagar», con el botón Pagar.
+        $this->actingInCompany($user, $company)->get(route('commissions.index'))
+            ->assertOk()->assertSee('Pendiente de pagar')->assertSee('TANIA MOLINA')->assertSee('Pagar');
+        // Y en Gastos › Personal.
+        $this->actingInCompany($user, $company)->get(route('expenses.index', ['group' => 'personal']))
+            ->assertOk()->assertSee('Pendiente de pagar')->assertSee('TANIA MOLINA');
+
+        // La app: lo pendiente y el pago, desde la caja abierta.
+        \Laravel\Sanctum\Sanctum::actingAs($user);
+        $headers = ['X-Company-Id' => (string) $company->id];
+        $pending = $this->getJson('/api/v1/commissions/pending', $headers)->assertOk()
+            ->assertJsonPath('summary.total', 40.0)
+            ->assertJsonPath('data.0.name', 'TANIA MOLINA')
+            ->json('data.0');
+
+        $this->postJson("/api/v1/commissions/{$barber->id}/settle", [
+            'period_start' => $pending['since'], 'period_end' => now()->toDateString(),
+            'source' => 'cash', 'cash_session_id' => $session->id,
+        ], $headers)->assertCreated()->assertJsonPath('data.total', 40.0);
+
+        $this->getJson('/api/v1/commissions/pending', $headers)->assertOk()->assertJsonPath('summary.total', 0.0)->assertJsonCount(0, 'data');
+        $this->assertSame('40.00', CashMovement::allCompanies()->where('type', 'egreso')->value('amount'));
+    }
+
     public function test_una_comision_no_se_liquida_dos_veces(): void
     {
         $company = $this->company();

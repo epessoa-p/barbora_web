@@ -19,6 +19,11 @@
     $identityTitle = $personal?->cargo?->name ?? $currentCompany?->getRoleForUser($authUser)?->name;
     $identityName = $personal?->full_name ?? $authUser->name;
 
+    // El botón «Caja» de la barra: abierta o cerrada, con sus cajas en un modal.
+    $cashStatus = (! $isGlobalMode && $currentCompany && $hasModule('caja') && $can('cash.view'))
+        ? \App\Support\CashStatus::for($authUser, $currentCompany->id)
+        : null;
+
     // Un único menú para la barra lateral y el offcanvas: antes estaban
     // duplicados y ya habían divergido.
     // El color identifica cada sección: se mantiene en el punto y en el borde
@@ -249,6 +254,19 @@
                 </div>
 
                 <div class="d-flex align-items-center gap-2">
+                    @if($cashStatus && $cashStatus['preferred'])
+                        @php $preferredCaja = $cashStatus['preferred']; @endphp
+                        <button type="button" class="btn btn-outline-light btn-sm d-flex align-items-center gap-2"
+                                data-bs-toggle="modal" data-bs-target="#cashModal"
+                                title="{{ $preferredCaja['name'] }}: {{ $preferredCaja['open'] ? 'turno abierto' : 'cerrada' }}">
+                            <i class="bi bi-cash-stack"></i>
+                            <span class="d-none d-md-inline">Caja</span>
+                            <span class="d-inline-flex align-items-center gap-1 small">
+                                <span class="rounded-circle d-inline-block" style="width:.55rem;height:.55rem;background:{{ $preferredCaja['open'] ? '#22c55e' : '#ef4444' }}"></span>
+                                {{ $preferredCaja['open'] ? 'Abierta' : 'Cerrada' }}
+                            </span>
+                        </button>
+                    @endif
                     <div class="dropdown">
                         <button class="btn btn-icon" type="button" data-bs-toggle="dropdown" aria-expanded="false">
                             <i class="bi bi-person-circle"></i>
@@ -341,6 +359,10 @@
         @yield('page')
     </main>
 </div>
+
+@if($cashStatus && $cashStatus['preferred'])
+    @include('cash.partials.quick-modal', ['cajas' => $cashStatus['cajas'], 'canOpen' => $can('cash.create')])
+@endif
 
 <div class="offcanvas offcanvas-start app-offcanvas" tabindex="-1" id="appSidebarMobile" aria-labelledby="appSidebarMobileLabel">
     <div class="offcanvas-header">

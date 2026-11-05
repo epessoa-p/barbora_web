@@ -59,6 +59,9 @@
                                         <span>
                                             <span class="fw-semibold d-block">{{ $person->full_name }}</span>
                                             <small class="text-muted">{{ $person->specialty ?: $person->cargo?->name }}</small>
+                                            @unless($person->bookable)
+                                                <span class="badge bg-light text-muted border fw-normal">No atiende citas</span>
+                                            @endunless
                                         </span>
                                     </a>
                                 </td>

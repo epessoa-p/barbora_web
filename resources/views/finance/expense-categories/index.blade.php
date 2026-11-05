@@ -2,17 +2,35 @@
 
 @section('title', 'Categorías de gasto - Barbora')
 
+{{--
+    Las categorías, agrupadas por tipo (ExpenseCategory::TYPES):
+      general    comida, pasajes, limpieza…
+      basicos    servicios básicos: luz, agua, internet, alquiler, hosting…
+                 se pagan cada mes o cada año (frequency)
+      proveedor  pagos a proveedores (el gasto pide el proveedor)
+      personal   pagos a personal (el gasto pide la persona)
+--}}
 @php
     $canCreate = auth()->user()->hasPermissionInCompany('expense_categories.create', $tenantCompany);
     $canEdit = auth()->user()->hasPermissionInCompany('expense_categories.edit', $tenantCompany);
     $canDelete = auth()->user()->hasPermissionInCompany('expense_categories.delete', $tenantCompany);
+    $types = \App\Models\ExpenseCategory::TYPES;
+    $frequencies = \App\Models\ExpenseCategory::FREQUENCIES;
+    $groups = $categories->groupBy(fn ($c) => $c->group());
+    $titles = ['general' => 'Gastos generales', 'basicos' => 'Servicios básicos', 'proveedor' => 'Pagos a proveedores', 'personal' => 'Pagos a personal'];
+    $hints = [
+        'general' => 'Comida, pasajes, limpieza… Salen en la pestaña Generales.',
+        'basicos' => 'Lo que se paga cada mes o cada año. Salen en la pestaña Servicios básicos, con el control del mes.',
+        'proveedor' => 'El gasto pide el proveedor; no hace falta elegir la categoría.',
+        'personal' => 'El gasto pide la persona; no hace falta elegir la categoría.',
+    ];
 @endphp
 
 @section('page')
 <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
     <div>
         <h1 class="h4 fw-bold mb-1"><i class="bi bi-tags"></i> Categorías de gasto</h1>
-        <p class="text-muted mb-0">En qué se gasta. «A quién se paga» decide si el gasto pide un proveedor o alguien del personal.</p>
+        <p class="text-muted mb-0">En qué se gasta. El tipo decide en qué pestaña de Gastos sale y qué pide al registrarlo.</p>
     </div>
 </div>
 
@@ -21,23 +39,25 @@
 @endif
 
 @if($canCreate)
-    <form action="{{ route('expense-categories.store') }}" method="POST" class="card border-0 shadow-sm mb-4">
+    <form action="{{ route('expense-categories.store') }}" method="POST" class="card border-0 shadow-sm mb-4 category-form">
         @csrf
         <div class="card-body p-3 row g-2 align-items-end">
-            <div class="col-md-5">
+            <div class="col-md-4">
                 <label class="form-label small">Nueva categoría</label>
-                <input type="text" name="name" class="form-control" maxlength="255" required placeholder="GAS, PUBLICIDAD, CAPACITACIÓN…">
-            </div>
-            <div class="col-md-2">
-                <div class="form-check mb-2">
-                    <input class="form-check-input" type="checkbox" name="recurring" value="1" id="new-recurring">
-                    <label class="form-check-label small" for="new-recurring" title="Alquiler, luz, agua… lo que se paga cada mes o cada año">Servicio básico</label>
-                </div>
+                <input type="text" name="name" class="form-control" maxlength="255" required placeholder="GAS, PUBLICIDAD, HOSTING…">
             </div>
             <div class="col-md-3">
-                <label class="form-label small">A quién se paga</label>
-                <select name="payee" class="form-select">
-                    @foreach(\App\Models\ExpenseCategory::PAYEES as $value => $label)
+                <label class="form-label small">Tipo</label>
+                <select name="type" class="form-select category-type">
+                    @foreach($types as $value => $label)
+                        <option value="{{ $value }}">{{ $label }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="col-md-3 category-frequency d-none">
+                <label class="form-label small">Se paga</label>
+                <select name="frequency" class="form-select">
+                    @foreach($frequencies as $value => $label)
                         <option value="{{ $value }}">{{ $label }}</option>
                     @endforeach
                 </select>
@@ -47,68 +67,86 @@
     </form>
 @endif
 
-<div class="card border-0 shadow-sm">
-    <div class="card-body p-0">
-        <div class="table-responsive">
-            <table class="table align-middle mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th class="ps-3">Categoría</th>
-                        <th>A quién se paga</th>
-                        <th class="text-center" title="Servicio básico: alquiler, luz, agua… (mensual o anual)">Básico</th>
-                        <th class="text-center">Gastos</th>
-                        <th class="text-center">Activa</th>
-                        <th class="text-end pe-3"></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach($categories as $category)
-                        <tr class="{{ $category->active ? '' : 'opacity-50' }}">
-                            @if($canEdit)
-                                <td class="ps-3" colspan="5">
-                                    <form action="{{ route('expense-categories.update', $category) }}" method="POST" class="row g-2 align-items-center">
-                                        @csrf
-                                        @method('PUT')
-                                        <div class="col-md-4"><input type="text" name="name" class="form-control form-control-sm" value="{{ $category->name }}" required></div>
-                                        <div class="col-md-3">
-                                            <select name="payee" class="form-select form-select-sm">
-                                                @foreach(\App\Models\ExpenseCategory::PAYEES as $value => $label)
-                                                    <option value="{{ $value }}" {{ $category->payee === $value ? 'selected' : '' }}>{{ $label }}</option>
-                                                @endforeach
-                                            </select>
-                                        </div>
-                                        <div class="col-md-1 text-center">
-                                            <input class="form-check-input" type="checkbox" name="recurring" value="1" title="Servicio básico" {{ $category->recurring ? 'checked' : '' }}>
-                                        </div>
-                                        <div class="col-md-1 text-center small text-muted">{{ $category->expenses_count }}</div>
-                                        <div class="col-md-1 text-center">
-                                            <input class="form-check-input" type="checkbox" name="active" value="1" {{ $category->active ? 'checked' : '' }}>
-                                        </div>
-                                        <div class="col-md-2"><button class="btn btn-sm btn-outline-primary w-100">Guardar</button></div>
-                                    </form>
-                                </td>
-                            @else
-                                <td class="ps-3 fw-semibold">{{ $category->name }}</td>
-                                <td>{{ $category->payeeLabel() }}</td>
-                                <td class="text-center">{{ $category->recurring ? 'Sí' : '—' }}</td>
-                                <td class="text-center">{{ $category->expenses_count }}</td>
-                                <td class="text-center">{{ $category->active ? 'Sí' : 'No' }}</td>
-                            @endif
-                            <td class="text-end pe-3">
-                                @if($canDelete)
-                                    <form action="{{ route('expense-categories.destroy', $category) }}" method="POST"
-                                          onsubmit="return confirm('¿Quitar esta categoría?')">
-                                        @csrf
-                                        @method('DELETE')
-                                        <button class="btn btn-sm btn-link text-danger p-0"><i class="bi bi-trash"></i></button>
-                                    </form>
+@foreach($titles as $groupKey => $title)
+    @php $rows = $groups->get($groupKey, collect()); @endphp
+    <div class="card border-0 shadow-sm mb-4">
+        <div class="card-body p-0">
+            <div class="p-3 border-bottom">
+                <h6 class="fw-bold mb-0">{{ $title }} <span class="text-muted fw-normal small">({{ $rows->count() }})</span></h6>
+                <small class="text-muted">{{ $hints[$groupKey] }}</small>
+            </div>
+            <div class="table-responsive">
+                <table class="table align-middle mb-0">
+                    <tbody>
+                        @forelse($rows as $category)
+                            <tr class="{{ $category->active ? '' : 'opacity-50' }}">
+                                @if($canEdit)
+                                    <td class="ps-3">
+                                        <form action="{{ route('expense-categories.update', $category) }}" method="POST" class="row g-2 align-items-center category-form">
+                                            @csrf
+                                            @method('PUT')
+                                            <div class="col-md-4"><input type="text" name="name" class="form-control form-control-sm" value="{{ $category->name }}" required></div>
+                                            <div class="col-md-3">
+                                                <select name="type" class="form-select form-select-sm category-type">
+                                                    @foreach($types as $value => $label)
+                                                        <option value="{{ $value }}" {{ $category->group() === $value ? 'selected' : '' }}>{{ $label }}</option>
+                                                    @endforeach
+                                                </select>
+                                            </div>
+                                            <div class="col-md-2 category-frequency {{ $category->recurring ? '' : 'd-none' }}">
+                                                <select name="frequency" class="form-select form-select-sm">
+                                                    @foreach($frequencies as $value => $label)
+                                                        <option value="{{ $value }}" {{ ($category->frequency ?: 'mensual') === $value ? 'selected' : '' }}>{{ $label }}</option>
+                                                    @endforeach
+                                                </select>
+                                            </div>
+                                            <div class="col-md-1 text-center small text-muted" title="Gastos registrados">{{ $category->expenses_count }}</div>
+                                            <div class="col-md-1 text-center">
+                                                <input class="form-check-input" type="checkbox" name="active" value="1" title="Activa" {{ $category->active ? 'checked' : '' }}>
+                                            </div>
+                                            <div class="col-md-1"><button class="btn btn-sm btn-outline-primary w-100">Guardar</button></div>
+                                        </form>
+                                    </td>
+                                @else
+                                    <td class="ps-3 fw-semibold">
+                                        {{ $category->name }}
+                                        @if($category->recurring)<span class="badge bg-light text-muted border">{{ $frequencies[$category->frequency] ?? 'Mensual' }}</span>@endif
+                                    </td>
+                                    <td class="text-center small text-muted">{{ $category->expenses_count }} gastos</td>
+                                    <td class="text-center">{{ $category->active ? 'Activa' : 'De baja' }}</td>
                                 @endif
-                            </td>
-                        </tr>
-                    @endforeach
-                </tbody>
-            </table>
+                                <td class="text-end pe-3" style="width: 2rem">
+                                    @if($canDelete)
+                                        <form action="{{ route('expense-categories.destroy', $category) }}" method="POST"
+                                              onsubmit="return confirm('¿Quitar esta categoría?')">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button class="btn btn-sm btn-link text-danger p-0"><i class="bi bi-trash"></i></button>
+                                        </form>
+                                    @endif
+                                </td>
+                            </tr>
+                        @empty
+                            <tr><td class="ps-3 text-muted small">Ninguna todavía.</td></tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
-</div>
+@endforeach
 @endsection
+
+@push('scripts')
+<script>
+// «Se paga» (mensual / anual) solo para los servicios básicos.
+document.querySelectorAll('.category-form').forEach(form => {
+    const type = form.querySelector('.category-type');
+    const frequency = form.querySelector('.category-frequency');
+    if (!type || !frequency) return;
+    const refresh = () => frequency.classList.toggle('d-none', type.value !== 'basicos');
+    type.addEventListener('change', refresh);
+    refresh();
+});
+</script>
+@endpush

@@ -140,7 +140,9 @@ class UserController extends Controller
                 unset($data['is_super_admin']);
             }
 
-            if (empty($data['password'])) {
+            // La contraseña de otro solo la cambia el superadmin (Modo Global);
+            // vacía, no se toca. El modelo la guarda cifrada (cast «hashed»).
+            if (empty($data['password']) || ! auth()->user()->is_super_admin) {
                 unset($data['password']);
             }
 
