@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\CatalogController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ManualController;
 use App\Http\Controllers\SubscriptionBlockedController;
 use Illuminate\Support\Facades\Route;
 
@@ -35,6 +36,7 @@ Route::get('/catalogo/{token}/afiche', [CatalogController::class, 'poster'])
 Route::middleware('auth')->group(function () {
     // Pantallas transversales, sin módulo propio.
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('/manual', [ManualController::class, 'index'])->name('manual');
     Route::get('/suscripcion/bloqueada', SubscriptionBlockedController::class)->name('subscription.blocked');
 
     foreach ([

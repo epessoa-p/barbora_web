@@ -35,6 +35,7 @@
             'color' => '#2563eb',
             'items' => [
                 ['show' => true, 'route' => 'dashboard', 'pattern' => 'dashboard', 'icon' => 'bi-house', 'label' => 'Dashboard'],
+                ['show' => true, 'route' => 'manual', 'pattern' => 'manual', 'icon' => 'bi-book', 'label' => 'Manual de usuario'],
             ],
         ],
         [

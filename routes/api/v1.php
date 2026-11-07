@@ -55,6 +55,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])
         ->middleware('check-permission:dashboard.view')->name('dashboard');
 
+    // El manual de usuario: lo mismo que la web, con lo que este usuario puede usar.
+    Route::get('/manual', function (\Illuminate\Http\Request $request) {
+        return response()->json([
+            'data' => \App\Support\UserManual::for('app', $request->user(), $request->attributes->get('tenant_company')),
+        ]);
+    })->name('manual');
+
     // ── Agenda (módulo de plan «agenda») ────────────────────────────────────
     Route::middleware('plan:agenda')->group(function () {
         Route::get('/agenda', [AgendaController::class, 'index'])
