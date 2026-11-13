@@ -225,9 +225,12 @@
                                 default => 'danger',
                             };
                         @endphp
-                        <span class="badge bg-{{ $badge }}" title="Plan {{ $subscription->plan?->name }}">
-                            {{ $subscription->statusLabel() }}
-                        </span>
+                        {{-- Al día no hace falta avisar: solo se muestra prueba, gracia o bloqueo. --}}
+                        @if($badge !== 'success')
+                            <span class="badge bg-{{ $badge }}" title="Plan {{ $subscription->plan?->name }}">
+                                {{ $subscription->statusLabel() }}
+                            </span>
+                        @endif
                     @endif
 
                     @if(! $authUser->is_super_admin && $activeCompanies->count() > 1)
