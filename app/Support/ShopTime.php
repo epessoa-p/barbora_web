@@ -25,6 +25,30 @@ use Carbon\CarbonInterface;
 class ShopTime
 {
     /**
+     * Pone el reloj de la petición en la zona de la empresa.
+     *
+     * Como todo se guarda en hora de pared del local, now(), today() e
+     * isPast() tienen que contar en esa misma hora. Con el reloj en UTC, a las
+     * 09:00 de La Paz el sistema creía que eran las 13:00: la agenda escondía
+     * las horas de la mañana como «pasadas» y una venta de las 21:00 se
+     * registraba al día siguiente. Lo llama SetTenant en cada petición.
+     */
+    public static function apply(?Company $company): void
+    {
+        $timezone = self::zoneOf($company);
+
+        config(['app.timezone' => $timezone]);
+        date_default_timezone_set($timezone);
+    }
+
+    public static function zoneOf(?Company $company): string
+    {
+        $timezone = $company?->timezone ?: config('barbora.default_timezone', 'America/La_Paz');
+
+        return in_array($timezone, timezone_identifiers_list(), true) ? $timezone : 'America/La_Paz';
+    }
+
+    /**
      * «Ahora» en la hora de pared de la barbería, comparable con lo guardado.
      *
      * Como las fechas se guardan sin convertir (09:00 de La Paz se guarda

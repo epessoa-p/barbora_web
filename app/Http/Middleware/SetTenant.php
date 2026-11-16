@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Http\Middleware\Concerns\RespondsToApi;
 use App\Models\User;
+use App\Support\ShopTime;
 use App\Support\Tenancy;
 use Closure;
 use Illuminate\Http\Request;
@@ -65,6 +66,9 @@ class SetTenant
         }
 
         $company = $tenancy->company();
+
+        // El reloj de la petición, en la hora de la empresa (ver ShopTime::apply).
+        ShopTime::apply($company);
 
         // Los controladores y las vistas leen de aquí, sin repetir la consulta.
         $request->attributes->set('tenant_company', $company);

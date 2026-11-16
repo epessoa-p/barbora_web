@@ -65,7 +65,9 @@ return [
     |
     */
 
-    'timezone' => 'UTC',
+    // Hora de pared de Bolivia por defecto (visitantes, comandos). Con sesión
+    // iniciada, SetTenant la cambia a la zona de la empresa (ShopTime::apply).
+    'timezone' => env('BARBORA_TIMEZONE', 'America/La_Paz'),
 
     /*
     |--------------------------------------------------------------------------

@@ -105,6 +105,45 @@ class ApiBookingTest extends TestCase
         $this->assertNotContains('11:15', $slots, 'A las 11:15 el corte acabaría fuera del turno.');
     }
 
+    public function test_los_huecos_de_hoy_cuentan_con_la_hora_de_la_empresa(): void
+    {
+        // Servidor en UTC, barbería en La Paz (UTC-4). A las 08:30 de La Paz
+        // son las 12:30 UTC: antes se escondían 09:00–12:00 como «pasadas».
+        config(['app.timezone' => 'UTC']);
+        date_default_timezone_set('UTC');
+        $this->company->update(['timezone' => 'America/La_Paz']);
+        $this->travelTo(Carbon::parse('2026-11-16 08:30', 'America/La_Paz'));
+
+        Sanctum::actingAs($this->recepcion);
+
+        $slots = $this->getJson('/api/v1/booking/slots?'.http_build_query([
+            'personal_id' => $this->barber->id,
+            'date' => '2026-11-16',
+            'services' => [$this->corte->id],
+        ]), $this->headers())->assertOk()->json('data');
+
+        $this->assertSame('09:00', $slots[0] ?? null);
+        $this->assertSame('11:00', end($slots));
+    }
+
+    public function test_una_venta_se_registra_con_la_hora_de_la_empresa(): void
+    {
+        config(['app.timezone' => 'UTC']);
+        date_default_timezone_set('UTC');
+        $this->company->update(['timezone' => 'America/La_Paz']);
+        // 21:00 de La Paz = 01:00 UTC del día siguiente.
+        $this->travelTo(Carbon::parse('2026-11-16 21:00', 'America/La_Paz'));
+
+        Sanctum::actingAs($this->recepcion);
+        $this->getJson('/api/v1/booking/slots?'.http_build_query([
+            'personal_id' => $this->barber->id,
+            'date' => '2026-11-16',
+            'services' => [$this->corte->id],
+        ]), $this->headers())->assertOk();
+
+        $this->assertSame('2026-11-16 21:00', now()->format('Y-m-d H:i'));
+    }
+
     public function test_un_hueco_ocupado_no_se_ofrece(): void
     {
         $this->inCompany($this->company, fn () => Appointment::create([
